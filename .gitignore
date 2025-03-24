@@ -1,6 +1,9 @@
 # vscode stuff
 .vscode/
 
+# outputs that can be chunky
+output/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

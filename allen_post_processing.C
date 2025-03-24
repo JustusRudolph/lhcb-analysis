@@ -9,7 +9,7 @@
 
 void eff_pur_plots(bool withElectrons=true) {
   // Open ROOT file and retrieve histograms
-  TFile *file = TFile::Open("output/PrCheckerPlots.root");
+  TFile *file = TFile::Open("../output/PrCheckerPlots.root");
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
       return;
@@ -106,7 +106,7 @@ void eff_pur_plots(bool withElectrons=true) {
 }
 
 void plot_clone_rates(unsigned kEventsPerRun=200) {
-  TFile *file = TFile::Open("MCData_Checking.root");
+  TFile *file = TFile::Open("../MCData_Checking.root");
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
       return;
@@ -250,7 +250,7 @@ void plot_clone_rates(unsigned kEventsPerRun=200) {
 }
 
 void allen_post_processing(bool withElectrons=true) {
-  // eff_pur_plots(withElectrons);
+  eff_pur_plots(withElectrons);
   plot_clone_rates();
 }
 
