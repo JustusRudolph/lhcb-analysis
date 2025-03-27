@@ -7,9 +7,12 @@
 #include <unordered_set>
 #include <string>
 
+std::string stackRoot = std::getenv("STACK_ROOT");
+std::string analysisRoot = std::getenv("ANALYSIS_ROOT");
+
 void eff_pur_plots(bool withElectrons=true) {
   // Open ROOT file and retrieve histograms
-  TFile *file = TFile::Open("../output/PrCheckerPlots.root");
+  TFile *file = TFile::Open((stackRoot + "/output/PrCheckerPlots.root").c_str());
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
       return;
@@ -18,7 +21,7 @@ void eff_pur_plots(bool withElectrons=true) {
   // set up canvases for forward and backward region, and types of plots
   std::vector<std::string> types = {"Pt", "Eta", "docaz"};
   std::vector<std::string> x_axes = {"pT (MeV)", "eta", "docaz (mm)"};
-  std::string base_string = "velo_validator/VeloTracks_eta";
+  std::string base_string = "velo_kalman_validator/VeloTracks_eta";
   TCanvas *canvas = new TCanvas("c", "Efficiencies", 1000, 800);
   canvas->Divide(2, 3);
   int c_idx = 1;
@@ -40,20 +43,27 @@ void eff_pur_plots(bool withElectrons=true) {
 
       // Check if histograms are properly loaded
       if (!nonElectronsReconstructible) {
-        std::cerr << "Error: Hist 0 not found in the ROOT file: "
-                  << (base_string_region + "_notElectrons_" + type + "_reconstructible").c_str() << std::endl;
+        std::cerr << "Error: Hist "
+                  << (base_string_region + "_notElectrons_" + type + "_reconstructible").c_str()
+                  << "not found in root file ../../output/PrCheckerPlots.root" << std::endl;
         file->Close();
         return;
       } else if (!electronsReconstructible) {
-        std::cerr << "Error: Hist 1 not found in the ROOT file." << std::endl;
+        std::cerr << "Error: Hist "
+                  << (base_string_region + "_electrons_" + type + "_reconstructible").c_str()
+                  << "not found in root file ../../output/PrCheckerPlots.root" << std::endl;
         file->Close();
         return;
       } else if (!nonElectronsReconstructed) {
-        std::cerr << "Error: Hist 2 not found in the ROOT file." << std::endl;
+        std::cerr << "Error: Hist "
+                  << (base_string_region + "_notElectrons_" + type + "_reconstructed").c_str()
+                  << "not found in root file ../../output/PrCheckerPlots.root" << std::endl;
         file->Close();
         return;
       } else if (!electronsReconstructed) {
-        std::cerr << "Error: Hist 3 not found in the ROOT file." << std::endl;
+        std::cerr << "Error: Hist "
+                  << (base_string_region + "_electrons_" + type + "_reconstructed").c_str()
+                  << "not found in root file ../../output/PrCheckerPlots.root" << std::endl;
         file->Close();
         return;
       }
@@ -98,15 +108,15 @@ void eff_pur_plots(bool withElectrons=true) {
     }  // types
     c_idx = 2;  // move to second column
   }  // isForward
-  canvas->SaveAs("output/efficiency_plots.pdf");
+  canvas->SaveAs((analysisRoot + "/output/efficiency_plots.pdf").c_str());
   // Clean up
   file->Close();
   delete file;
   delete canvas;
 }
 
-void plot_clone_rates(unsigned kEventsPerRun=200) {
-  TFile *file = TFile::Open("../MCData_Checking.root");
+void get_clone_rates(unsigned kEventsPerRun=200) {
+  TFile *file = TFile::Open((stackRoot + "/MCData_Checking.root").c_str());
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
       return;
@@ -177,17 +187,28 @@ void plot_clone_rates(unsigned kEventsPerRun=200) {
   unsigned nRecoWithoutClones = nReco - nMCTracksWithClones;
 
   TProfile* hDuplicateIDRates = new TProfile(
-    "Duplicate match ID", "Duplicate match ID rate;$\eta$;DuplicateIDRate",
+    "duplicate_match_id", "Duplicate match ID rate;#eta;DuplicateIDRate",
     nBins, etaBinEdges.data());
   TProfile* hUniqueIDRates = new TProfile(
-    "Unique ID match rate", "Unique ID match rate",
+    "unique_id_match_rate", "Unique ID match rate;#eta;Total ID reconstruction rate",
     nBins, etaBinEdges.data());
   TProfile* hLongestMatchedTrackRate = new TProfile(
-    "Longest matched track fraction", "Longest matched track fraction",
+    "longest_matched_track_fraction", "Longest matched track fraction;#eta;Longest Track Size (norm)",
+    nBins, etaBinEdges.data());
+  TProfile* hLongestMatchedTrackRateClones = new TProfile(
+    "longest_matched_track_fraction_1_clones",
+    "Longest matched track fraction;#eta;Longest Track Size (norm)",
+    nBins, etaBinEdges.data());
+  TProfile* hLongestMatchedTrackRate5Clones = new TProfile(
+    "longest_matched_track_fraction_5_clones",
+    "Longest matched track fraction;#eta;Longest Track Size (norm)",
     nBins, etaBinEdges.data());
   // following is whether the longest track was also tagged as the main match
   TProfile* hLongestTrackTagged = new TProfile(
-    "Longest match tag rate", "Longest match tag rate",
+    "longest_match_tag_rate", "Longest match tag rate;#eta;Longest Track Tag Rate",
+    nBins, etaBinEdges.data());
+  TProfile* hNMatches = new TProfile(
+    "number_of_matches_of_MC_track", "Number of Matches of MC Track;#eta;N_{matches}",
     nBins, etaBinEdges.data());
 
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
@@ -210,7 +231,7 @@ void plot_clone_rates(unsigned kEventsPerRun=200) {
       if (recoTrackLHCbIDs->size() > longestTrackSize) {
         // if longest track size not zero, that means it has already been changed
         // hence a later track is bigger, which shouldn't be
-        if (!longestTrackSize) longestTrackTagged = 0;
+        if (longestTrackSize) longestTrackTagged = 0;
         longestTrackSize = recoTrackLHCbIDs->size();
       }
       for (unsigned lhcbid : *recoTrackLHCbIDs) {
@@ -223,35 +244,43 @@ void plot_clone_rates(unsigned kEventsPerRun=200) {
 
     hDuplicateIDRates->Fill(mcEta, idDuplRate);
     hUniqueIDRates->Fill(mcEta, idMatchRate);
-    hLongestMatchedTrackRate->Fill(mcEta, longestTrackRate);
+
+    if (nMatches > 5) {  // at least 5 clones
+      hLongestMatchedTrackRate5Clones->Fill(mcEta, longestTrackRate);
+    } else if (nMatches > 1) {  // at least one clone
+      hLongestMatchedTrackRateClones->Fill(mcEta, longestTrackRate);
+    } else {  // will be exactly one match now because already checked not zero
+      hLongestMatchedTrackRate->Fill(mcEta, longestTrackRate);
+    }
+
     hLongestTrackTagged->Fill(mcEta, longestTrackTagged);
+    hNMatches->Fill(mcEta, nMatches);
 
     if (i_mct && (i_mct % 20000 == 0))
       printf("Finished with %d %% of MC Tracks.\n", (int) (100. * (float) i_mct / nMCTracks));
   }
-  TCanvas* canvas = new TCanvas("c", "MC Clone Information", 1000, 800);
-  canvas->Divide(2, 2);
+  // write histograms
+  TFile* outFile = new TFile((analysisRoot + "/hists/clones/mc_hists.root").c_str(), "RECREATE");
+  hDuplicateIDRates->Write();
+  hUniqueIDRates->Write();
+  hLongestMatchedTrackRate->Write();
+  hLongestMatchedTrackRateClones->Write();
+  hLongestMatchedTrackRate5Clones->Write();
+  hLongestTrackTagged->Write();
+  hNMatches->Write();
+  // Clean up outfile
+  outFile->Close();
+  delete outFile;
 
-  gStyle->SetOptStat(0);  // remove the info box
-  canvas->cd(1);
-  hDuplicateIDRates->Draw();
-  canvas->cd(2);
-  hUniqueIDRates->Draw();
-  canvas->cd(3);
-  hLongestMatchedTrackRate->Draw();
-  canvas->cd(4);
-  hLongestTrackTagged->Draw();
-
-  canvas->SaveAs("output/mc_clone_plots.pdf");
-  // Clean up
+  // clean up file
   file->Close();
   delete file;
-  delete canvas;
 }
 
 void allen_post_processing(bool withElectrons=true) {
+  gROOT->SetBatch();
   eff_pur_plots(withElectrons);
-  plot_clone_rates();
+  get_clone_rates();
 }
 
 int main() {

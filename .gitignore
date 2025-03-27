@@ -4,6 +4,7 @@
 # outputs that can be chunky
 output/
 data/
+hists/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
