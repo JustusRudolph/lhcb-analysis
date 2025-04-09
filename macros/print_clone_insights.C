@@ -1,5 +1,6 @@
 #include <TFile.h>
 #include <TTree.h>
+#include <TMath.h>
 #include <iostream>
 #include <vector>
 #include <unordered_set>
@@ -9,8 +10,9 @@ std::string stackRoot = std::getenv("STACK_ROOT");
 std::string analysisRoot = std::getenv("ANALYSIS_ROOT");
 
 void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
-                          unsigned nHitsMaximum=8) {
-  TFile *file = TFile::Open((stackRoot + "/MCData_Checking.root").c_str());
+                          unsigned nClonesMaximum=20, unsigned nHitsMinimum=3,
+                          unsigned nHitsMaximum=8, std::string mcFilePath="MCData_Checking.root") {
+  TFile *file = TFile::Open((stackRoot + mcFilePath).c_str());
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
       return;
@@ -36,13 +38,16 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       std::cerr << "TTree not found!" << std::endl;
       return;
   }
-  unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits;
-  float doca_t_reco, mcEta, recoEta;
+  unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits,
+           recoTrackEvNo, recoTrackRunNo;
+  float doca_t_reco, mcEta, recoEta, recoChi2, pt;
   bool isBackward;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
   std::vector<unsigned>* mcTrackLHCbIDs = nullptr;
   std::vector<float>* t_mc = nullptr;
+  std::vector<float>* x_mc = nullptr;
+  std::vector<float>* y_mc = nullptr;
   std::vector<float>* t_reco = nullptr;
   std::vector<float>* x_reco = nullptr;
   std::vector<float>* y_reco = nullptr;
@@ -57,10 +62,15 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   mcTrackTree->SetBranchAddress("nHitsVelo", &nMCVeloHits);
   mcTrackTree->SetBranchAddress("lhcbid", &mcTrackLHCbIDs);
   mcTrackTree->SetBranchAddress("t", &t_mc);
+  mcTrackTree->SetBranchAddress("x", &x_mc);
+  mcTrackTree->SetBranchAddress("y", &y_mc);
   mcTrackTree->SetBranchAddress("eta", &mcEta);
+  mcTrackTree->SetBranchAddress("pt", &pt);
   // Reco Event Tree
   recoEventTree->SetBranchAddress("globalTrackOffset", &recoEvOffset);
   // Reco Track Tree
+  recoTrackTree->SetBranchAddress("evNo", &recoTrackEvNo);
+  recoTrackTree->SetBranchAddress("runNo", &recoTrackRunNo);
   recoTrackTree->SetBranchAddress("lhcbid", &recoTrackLHCbIDs);
   recoTrackTree->SetBranchAddress("isBackward", &isBackward);
   recoTrackTree->SetBranchAddress("t_k", &doca_t_reco);
@@ -68,7 +78,9 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   recoTrackTree->SetBranchAddress("x", &x_reco);
   recoTrackTree->SetBranchAddress("y", &y_reco);
   recoTrackTree->SetBranchAddress("eta", &recoEta);
+  recoTrackTree->SetBranchAddress("chi2", &recoChi2);
 
+  unsigned nRecoTrackLongerThanMC = 0;
   // Now let's go through all MC tracks
   unsigned nMCTracks = mcTrackTree->GetEntries();
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
@@ -79,13 +91,16 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       if (t < t_min) t_min = t;
       else if (t > t_max) t_max = t;
     }
-    if (nMCVeloHits > nHitsMaximum || nMatches <= nClonesMinimum) continue;
+    if (nMCVeloHits > nHitsMaximum || nMCVeloHits < nHitsMinimum ||
+        nMatches <= nClonesMinimum ||  nMatches > (nClonesMaximum+1)) continue;
   
-    printf("MC Track %u at eta %.3f with %u hits {", i_mct, mcEta, nMCVeloHits);
+    printf("Run %u, Ev %u, MC Track %u at eta %.3f & pT %.3f with %u hits {",
+           mcTrackRunNo, mcTrackEvNo, i_mct, mcEta, pt, nMCVeloHits);
     for (unsigned int i_lhcbid = 0; i_lhcbid < mcTrackLHCbIDs->size(); i_lhcbid++) {
       unsigned lhcbid = mcTrackLHCbIDs->at(i_lhcbid);
       unsigned moduleNumber = (lhcbid >> 12) & 0x3F;
-      printf("%u (%u, t=%.3f)", moduleNumber, lhcbid, t_mc->at(i_lhcbid));
+      float phi = TMath::ATan2(y_mc->at(i_lhcbid), x_mc->at(i_lhcbid));
+      printf("%u (id=%u, t=%.3f)", moduleNumber, lhcbid, t_mc->at(i_lhcbid));
       if (i_lhcbid != mcTrackLHCbIDs->size() - 1) printf(", ");
     }
     printf("} has %u clones.\n", nMatches-1);
@@ -93,7 +108,6 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       // check if backward or not
       if (isBackward) printf("\t[B] ");
       else printf("\t[F] ");
-      printf("Reco Track %u with doca t %.3f & eta %.3f: {", matchIdx, doca_t_reco, recoEta);
       unsigned evIdx = (mcTrackRunNo - 1) * kEventsPerRun + (mcTrackEvNo - 1);
       recoEventTree->GetEntry(evIdx);
       unsigned recoTrackIdx = recoEvOffset + matchIdx;
@@ -102,16 +116,24 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
         std::cout << "Nothing found in reco track tree for lhcbid at index " << recoTrackIdx << ".\n";
         continue;  // if nothing there, this is weird...
       }
-      for (unsigned int i_lhcbid = 0; i_lhcbid < recoTrackLHCbIDs->size(); i_lhcbid++) {
+      unsigned nRecoHits = recoTrackLHCbIDs->size();
+      nRecoTrackLongerThanMC += (nRecoHits > nMCVeloHits);
+
+      printf("Run %u, Ev %u, Reco Track %u with %u hits, chi2 %.3f & eta %.3f: {",
+             recoTrackRunNo, recoTrackEvNo, matchIdx, nRecoHits, recoChi2, recoEta);
+      for (unsigned int i_lhcbid = 0; i_lhcbid < nRecoHits; i_lhcbid++) {
         unsigned lhcbid = recoTrackLHCbIDs->at(i_lhcbid);
         unsigned moduleNumber = (lhcbid >> 12) & 0x3F;
-        printf("%u (%u, t=%.3f)", moduleNumber, lhcbid, t_reco->at(i_lhcbid));
-        if (i_lhcbid != recoTrackLHCbIDs->size() - 1) printf(", ");
+        float phi = TMath::ATan2(y_reco->at(i_lhcbid), x_reco->at(i_lhcbid));
+        printf("%u (phi=%.3f, t=%.3f)", moduleNumber, phi, t_reco->at(i_lhcbid));
+        if (i_lhcbid != nRecoHits - 1) printf(", ");
       }
       printf("}\n");
     }
+    printf("\n");
   }
   printf("Largest and smallest times throughout all events: (%.3f, %.3f)\n", t_min, t_max);
+  printf("Number of reco tracks longer than MC tracks: %u\n", nRecoTrackLongerThanMC);
 
   return;
 }
