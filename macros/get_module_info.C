@@ -2,12 +2,13 @@
 #include <TTree.h>
 #include <TH1F.h>
 #include <TCanvas.h>
+#include <TMath.h>
 
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
-void get_module_z_positions() {
+void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1) {
   gROOT->SetBatch();  // don't show hists while running
   std::string stackRoot = std::getenv("STACK_ROOT");
   std::string analysisRoot = std::getenv("ANALYSIS_ROOT");
@@ -25,25 +26,47 @@ void get_module_z_positions() {
     moduleBinEdges[i] = -0.5 + step * i;
   }
 
+  TH1D* moduleDensity = new TH1D("moduleDensity", "Occupancy by module;module ID;Counts",
+                                 nBins, moduleBinEdges.data());
   TProfile* moduleToZ = new TProfile("module_to_z", "Z positions of modules",
                                      nBins, moduleBinEdges.data());
+  TH1D* phiDensity = new TH1D("phiDensity", "Occupancy by #phi;#phi;Counts", 100, -3.15, 3.15);
+  TH2D* xyDensity = new TH2D("xyDensity", "Occupancy by x-y;x;y", 20, -50, 50, 20, -50, 50);
+  TProfile* moduleTimes = new TProfile("module_times", "Timestamps of hits in modules",
+                                       nBins, moduleBinEdges.data());
   
   // now get the data from tree
-  unsigned lhcbid;
-  float z;
+  unsigned lhcbid, evNo, runNo;
+  float x, y, z, t;
   TTree* fakeClusTree = (TTree*) file->Get("FakeClusters");
   if (!fakeClusTree) {
       std::cerr << "TTree not found!" << std::endl;
       return;
   }
+  fakeClusTree->SetBranchAddress("runNo", &runNo);
+  fakeClusTree->SetBranchAddress("evNo", &evNo);
   fakeClusTree->SetBranchAddress("id", &lhcbid);
+  fakeClusTree->SetBranchAddress("x", &x);
+  fakeClusTree->SetBranchAddress("y", &y);
   fakeClusTree->SetBranchAddress("z", &z);
+  fakeClusTree->SetBranchAddress("t", &t);
 
   unsigned nEntries = fakeClusTree->GetEntries();
   for (unsigned i = 0; i < nEntries; i++) {
     fakeClusTree->GetEntry(i);
+    // only take from specific run and event if specified
+    if (runNoCheck >=0 && runNo != runNoCheck) continue;
+    if (evNoCheck >=0 && evNo != evNoCheck) continue;
     unsigned tvMod = (lhcbid >> 12) & 0x3F;
     moduleToZ->Fill(tvMod, z);
+    moduleDensity->Fill(tvMod);
+
+    // phi only filled for specific module that's requested
+    if (moduleNoCheck >= 0 && tvMod != moduleNoCheck) continue;
+    float phi = TMath::ATan2(y, x);
+    phiDensity->Fill(phi);
+    xyDensity->Fill(x, y);
+    moduleTimes->Fill(tvMod, t);
 
     // print status
     if (i && (i % 1000000 == 0))
@@ -51,8 +74,12 @@ void get_module_z_positions() {
   }
 
   // Finally write the profile to a file
-  TFile* outFile = new TFile((analysisRoot + "/hists/module_z_positions.root").c_str(), "RECREATE");
+  TFile* outFile = new TFile((analysisRoot + "/hists/module_mc_info.root").c_str(), "RECREATE");
   moduleToZ->Write();
+  moduleDensity->Write();
+  phiDensity->Write();
+  xyDensity->Write();
+  moduleTimes->Write();
 
   // clean up
   outFile->Close();
