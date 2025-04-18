@@ -5,14 +5,12 @@
 #include <iostream>
 #include <vector>
 #include <unordered_set>
-#include <string>
 
-std::string stackRoot = std::getenv("STACK_ROOT");
-std::string analysisRoot = std::getenv("ANALYSIS_ROOT");
+#include "utils/definitions.h"
 
 void eff_pur_plots(bool withElectrons=true) {
   // Open ROOT file and retrieve histograms
-  TFile *file = TFile::Open((stackRoot + "/output/PrCheckerPlots.root").c_str());
+  TFile *file = TFile::Open((Utils::Definitions::stackRoot + "/output/PrCheckerPlots.root").c_str());
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
       return;
@@ -108,7 +106,7 @@ void eff_pur_plots(bool withElectrons=true) {
     }  // types
     c_idx = 2;  // move to second column
   }  // isForward
-  canvas->SaveAs((analysisRoot + "/output/efficiency_plots.pdf").c_str());
+  canvas->SaveAs((Utils::Definitions::analysisRoot + "/output/efficiency_plots.pdf").c_str());
   // Clean up
   file->Close();
   delete file;

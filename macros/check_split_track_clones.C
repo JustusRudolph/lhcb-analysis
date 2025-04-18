@@ -115,7 +115,7 @@ void check_split_track_clones(unsigned kEventsPerRun=200) {
   printf("Going through %u MC particles now.\n", nMCTracks);
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
     // print progress
-    if (i_mct && (i_mct % 100000 == 0))
+    if (i_mct && (i_mct % 1000000 == 0))
       printf("Finished with %d%% of MC Tracks.\n", (int) (100. * (float) i_mct / nMCTracks));
     
     mcTrackTree->GetEntry(i_mct);
