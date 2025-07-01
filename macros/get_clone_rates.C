@@ -1,6 +1,7 @@
 #include <TFile.h>
 #include <TH1F.h>
 #include <TCanvas.h>
+#include <TString.h>
 #include <iostream>
 #include <vector>
 #include <unordered_set>
@@ -9,9 +10,14 @@
 #include "utils/definitions.h"
 #include "utils/basic_functions.h"
 
-
-void get_clone_rates(unsigned kEventsPerRun=200) {
-  TFile *file = TFile::Open((Utils::Definitions::stackRoot + "output/MCData_Checking5000.root").c_str());
+// max_dt is in picoseconds and scatter in micrometers
+void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
+                     unsigned kEventsPerRun=200) {
+  TString suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
+  TString input_suffix = suffix + ".root";
+  TString input_prefix = (Utils::Definitions::stackRoot + "output/MCData_Checking").c_str();
+  TString filepath = input_prefix + input_suffix;
+  TFile *file = TFile::Open(filepath);
   if (!file || file->IsZombie()) {
     std::cerr << "Error: Could not open ROOT file." << std::endl;
     return;
@@ -60,8 +66,9 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
       return;
   }
   // define everything that you will need
+  bool isClone, hasVelo;
   unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits;
-  int mcMatchIdxForReco;
+  int mcMatchIdxForReco, mcPID;
   float mcEta, recoEta;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
@@ -73,6 +80,8 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
   mcTrackTree->SetBranchAddress("evNo", &mcTrackEvNo);
   mcTrackTree->SetBranchAddress("runNo", &mcTrackRunNo);
   mcTrackTree->SetBranchAddress("eta", &mcEta);
+  mcTrackTree->SetBranchAddress("hasVelo", &hasVelo);
+  mcTrackTree->SetBranchAddress("pid", &mcPID);
   mcTrackTree->SetBranchAddress("nHitsVelo", &nMCVeloHits);
   mcTrackTree->SetBranchAddress("lhcbid", &mcTrackLHCbIDs);
   // Reco Event Tree
@@ -81,7 +90,10 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
   recoTrackTree->SetBranchAddress("lhcbid", &recoTrackLHCbIDs);
   recoTrackTree->SetBranchAddress("mcMatchIdx", &mcMatchIdxForReco);
   recoTrackTree->SetBranchAddress("eta", &recoEta);
+  recoTrackTree->SetBranchAddress("isClone", &isClone);
 
+  unsigned nHasVelo{0}, nHasAtLeastOneHit{0},
+           nHasAtLeastTwoHits{0}, nHasAtLeastThreeHits{0};
   unsigned nMCTracks = mcTrackTree->GetEntries();
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
     mcTrackTree->GetEntry(i_mct);
@@ -90,7 +102,13 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
     nMCTracksWithClones += (nMatches > 1);
     nMCTracksWith5Clones += (nMatches > 5);
     nMCTracksWith10Clones += (nMatches > 10);
+    nHasVelo += hasVelo;
+    nHasAtLeastOneHit += (nMCVeloHits > 0);
+    nHasAtLeastTwoHits += (nMCVeloHits > 1);
+    nHasAtLeastThreeHits += (nMCVeloHits > 2);
   }
+  printf("Out of %u MC tracks, %u have Velo hits, %u, %u, %u have at least 1,2,3 hits.\n",
+         nMCTracks, nHasVelo, nHasAtLeastOneHit, nHasAtLeastTwoHits, nHasAtLeastThreeHits);
   unsigned nRecoWithoutClones = nReco - nMCTracksWithClones;
 
   TProfile* hDuplicateIDRates = new TProfile(
@@ -143,6 +161,9 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
     nEtaBins, etaBinEdges.data());
   TProfile* ghostRates = new TProfile(
     "ghost_rates", "Ghost Rate wrt #eta (reconstructed tracks);#eta;Ghost Rate",
+    nEtaBins, etaBinEdges.data());
+  TProfile* cloneRate = new TProfile(
+    "clone_rate", "Clone Rate;#eta;Clone Rate",
     nEtaBins, etaBinEdges.data());
   // clone types by MC and reco
   // by MC describes the rate of an MC track having at least one clone,
@@ -281,12 +302,34 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
     "other_clone_reco_hit_distribution", "Other Clone Hit Distribution;N_{hits};Frequency",
     nHitBins, hitBinEdges.data());
 
-  printf("Going through MC particles now.\n");
+  printf("Going through %u MC particles now.\n", nMCTracks);
   unsigned nSeedingClones = 0, nTripletClones = 0, nSplitAndOverlapClones = 0,
            nSplitClones = 0, nSplit1MissedClones = 0, nSplit2MissedClones = 0,
            nAnySplitClones = 0, nSplitTrack2ndTrackFirst = 0;
+  unsigned nTotalForward = 0, nTotalBackward = 0,  // total number of MC tracks
+           nTotalRecodForward = 0, nTotalRecodBackward = 0,
+           nTotalClonesForward = 0, nTotalClonesBackward = 0;
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
     mcTrackTree->GetEntry(i_mct);
+    int mcPID_abs = mcPID < 0 ? -mcPID : mcPID;
+    bool isInAcceptance = (mcEta >= -5 && mcEta <= -2) ||
+                          (mcEta >= 2 && mcEta <= 5);
+    bool isReconstructible = isInAcceptance && hasVelo && (mcPID_abs != 11);  // no e+ or e-
+    if (!isReconstructible) continue;  // skip if not reconstructible
+    // Fill eff and clone numbers
+    if (mcEta < 0) {
+      nTotalBackward++;
+      if (nMatches) {  // only add to reconstructed or clone if matched to mc
+        nTotalRecodBackward++;
+        nTotalClonesBackward += (nMatches - 1);
+      }
+    } else {
+      nTotalForward++;
+      if (nMatches) {
+        nTotalRecodForward += (nMatches > 0);
+        nTotalClonesForward += (nMatches - 1);
+      }
+    }
     if (!nMatches || !matchedRecoTrackIndices) continue;
     std::unordered_set<unsigned> uniqueIDs;
     unsigned longestTrackSize = 0;
@@ -617,6 +660,8 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
       tripletClonesPlusRecoByEta->Fill(mcEta, (nMatches - 1) * isCloneOfTripletsPlus);
       moduleOverlapClonesRecoByEta->Fill(mcEta, (nMatches - 1) * isCloneOfModuleOverlap);
       otherClonesRecoByEta->Fill(mcEta, (nMatches - 1) * isOtherClone);
+      // have an if (!nMatches) guard already earlier
+      cloneRate->Fill(mcEta, nMatches - 1);
     }  // if nMatches && inEtaAcceptance(mcEta)
 
     float idDuplRate = 1. - (float) uniqueIDs.size() / (float) kTotalIDs;
@@ -635,8 +680,9 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
     }
     hNMatches->Fill(mcEta, nMatches);
 
-    if (i_mct && (i_mct % 100000 == 0))
+    if (i_mct && (i_mct % 100000 == 0)) {
       printf("Finished with %d%% of MC Tracks.\n", (int) (100. * (float) i_mct / nMCTracks));
+    }
   }  // MC Particles loop
   printf("Finished with all MC tracks.\n");
   printf("With %u seeding clones, %u are also triplet clones.\n",
@@ -650,16 +696,47 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
          hSplitTrackClone_1MissedDistribution->GetEntries(),
          hSplitTrackClone_2MissedDistribution->GetEntries());
   printf("Out of %u split track clones, %u have the second track first.\n",
-          nSplitTracks, nSplitTrack2ndTrackFirst);
+          nSplitClones, nSplitTrack2ndTrackFirst);
   // now lastly go through all reco tracks and find the ghost rates
   unsigned nRecoTracks = recoTrackTree->GetEntries();
+  printf("Going through %u reco tracks now.\n", nRecoTracks);
+  unsigned nTotalGhostsForward = 0, nTotalGhostsBackward = 0,
+           nTotalRecoTracksForward = 0, nTotalRecoTracksBackward = 0,
+           nTotalRecoClonesForward = 0, nTotalRecoClonesBackward = 0;
   for (unsigned i_recot = 0; i_recot < nRecoTracks; i_recot++) {
     recoTrackTree->GetEntry(i_recot);
     unsigned wasTagged = mcMatchIdxForReco != -1;
     ghostRates->Fill(recoEta, 1. - wasTagged);
+    if (recoEta < 0) {  // backward
+      nTotalRecoTracksBackward++;
+      nTotalGhostsBackward += (wasTagged == 0);
+      nTotalRecoClonesBackward += isClone;
+    } else {
+      nTotalRecoTracksForward++;
+      nTotalGhostsForward += (wasTagged == 0);
+      nTotalRecoClonesForward += isClone;
+    }
   }
+  printf("\nTotal summary:\n");
+  printf("\tForward: Eff %.2f%%, Ghost rate %.2f%%, Clone rate %.2f%%\n",
+         100. * (float) nTotalRecodForward / nTotalForward,
+         100. * (float) nTotalGhostsForward / nTotalRecoTracksForward,
+         100. * (float) nTotalClonesForward / (nTotalClonesForward + nTotalRecodForward));
+  printf("\tBackward: Eff %.2f%%, Ghost rate %.2f%%, Clone rate %.2f%%\n",
+         100. * (float) nTotalRecodBackward / nTotalBackward,
+         100. * (float) nTotalGhostsBackward / nTotalRecoTracksBackward,
+         100. * (float) nTotalClonesBackward / (nTotalClonesBackward + nTotalRecodBackward));
+  printf("\tThus overall: Eff %.2f%%, Ghost rate %.2f%%, Clone rate %.2f%%\n",
+         100. * (float) (nTotalRecodForward + nTotalRecodBackward) /
+                        (nTotalForward + nTotalBackward),
+         100. * (float) (nTotalGhostsForward + nTotalGhostsBackward) /
+                        (nTotalRecoTracksForward + nTotalRecoTracksBackward),
+         100. * (float) (nTotalRecoClonesForward + nTotalRecoClonesBackward) /
+                        ((nTotalRecoClonesForward + nTotalRecodForward) +
+                         (nTotalRecoClonesBackward + nTotalRecodBackward)));
   // write histograms
-  TFile* outFile = new TFile((Utils::Definitions::analysisRoot + "/hists/clones/mc_hists.root").c_str(), "RECREATE");
+  TFile* outFile = new TFile(TString((Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str()) +
+                              input_suffix, "RECREATE");
   hDuplicateIDRates->Write();
   hUniqueIDRates->Write();
   hLongestMatchedTrackRate->Write();
@@ -680,6 +757,7 @@ void get_clone_rates(unsigned kEventsPerRun=200) {
   hOtherCloneDistribution->Write();
   hNMatches->Write();
   ghostRates->Write();
+  cloneRate->Write();
   splitTrackClonesMCByEta->Write();
   splitTrackClones_1MissedMCByEta->Write();
   splitTrackClones_2MissedMCByEta->Write();

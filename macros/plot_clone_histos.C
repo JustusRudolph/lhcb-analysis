@@ -11,10 +11,13 @@
 #include "utils/basic_functions.h"
 
 
-void plot_clone_histos() {
+void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0) {
   gROOT->SetBatch();  // so stuff isn't autoplotted
-  TFile* file = TFile::Open((Utils::Definitions::analysisRoot + "/hists/clones/mc_hists.root").c_str());
-  printf("Opened file %s\n", (Utils::Definitions::analysisRoot + "/hists/clones/mc_hists.root").c_str());
+  TString suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
+  TString input_suffix = suffix + ".root";
+  TString mcHistParent = (Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str();
+  TFile* file = TFile::Open(mcHistParent + input_suffix);
+  std::cout << "Opened file: " << mcHistParent + input_suffix << std::endl;
 
   TProfile* hDuplicateIDRates = (TProfile*) file->Get("duplicate_match_id");
   TProfile* hUniqueIDRates = (TProfile*) file->Get("unique_id_match_rate");
@@ -39,7 +42,7 @@ void plot_clone_histos() {
   TH1D* hOverlapCloneDistribution = (TH1D*) file->Get("overlap_clone_distribution");
   TH1D* hOtherCloneDistribution = (TH1D*) file->Get("other_clone_distribution");
   TProfile* hNMatches = (TProfile*) file->Get("number_of_matches_of_MC_track");
-  TProfile* ghostRates = (TProfile*) file->Get("ghost_rates");
+  TProfile* p_cloneRate = (TProfile*) file->Get("clone_rate");
   printf("Got all basic histograms from file.\n");
 
   // Clone types by MC and Reco, wrt eta
@@ -179,7 +182,7 @@ void plot_clone_histos() {
   clonesMCSum->Add(h_splitTrackClonesMCByEta);
   clonesMCSum->Add(h_otherClonesMCByEta);
   // Add legend for MC clone stack
-  TLegend* mcCloneLegend = new TLegend(0.2, 0.5, 0.4, 0.7);
+  TLegend* mcCloneLegend = new TLegend(0.35, 0.5, 0.55, 0.7);
   mcCloneLegend->AddEntry(h_splitTrackClonesMCByEta, "LO Split Track", "f");
   mcCloneLegend->AddEntry(h_splitTrackClones_1MissedMCByEta, "NLO Split track", "f");
   mcCloneLegend->AddEntry(h_splitTrackClones_2MissedMCByEta, "NNLO Split track", "f");
@@ -212,7 +215,7 @@ void plot_clone_histos() {
   clonesRecoSum->Add(h_splitTrackClonesRecoByEta);
   clonesRecoSum->Add(h_otherClonesRecoByEta);
   // Add legend for Reco clone stack
-  TLegend* recoCloneLegend = new TLegend(0.2, 0.3, 0.4, 0.5);
+  TLegend* recoCloneLegend = new TLegend(0.35, 0.5, 0.55, 0.7);
   recoCloneLegend->AddEntry(h_splitTrackClonesRecoByEta, "LO Split Track", "f");
   recoCloneLegend->AddEntry(h_splitTrackClones_1MissedRecoByEta, "NLO split track", "f");
   recoCloneLegend->AddEntry(h_splitTrackClones_2MissedRecoByEta, "NNLO split track", "f");
@@ -394,12 +397,13 @@ void plot_clone_histos() {
   canvas->cd(3);
   hNMatches->Draw();
   canvas->cd(4);
-  ghostRates->SetLineColor(kMagenta);
-  ghostRates->GetYaxis()->SetRangeUser(0., 0.2);
-  ghostRates->Draw();
+  p_cloneRate->SetLineColor(kMagenta);
+  p_cloneRate->GetYaxis()->SetRangeUser(0., 0.2);
+  p_cloneRate->Draw();
 
-  canvas->SaveAs(
-    (Utils::Definitions::analysisRoot + "/output/mc_clone_plots.pdf").c_str());
+  TString outputBase = (Utils::Definitions::analysisRoot + "/output/clones/").c_str();
+  TString cloneOutputBase = outputBase + TString("mc_clone_plots");
+  canvas->SaveAs(cloneOutputBase + suffix + ".pdf");
   delete canvas;
   delete legend;
 
@@ -495,8 +499,8 @@ void plot_clone_histos() {
   recoCloneLegend->Draw();
 
   
-  canvas2->SaveAs(
-    (Utils::Definitions::analysisRoot + "/output/clone_distributions.pdf").c_str());
+  TString cloneDistrOutputBase = outputBase + TString("clone_distributions");
+  canvas2->SaveAs(cloneDistrOutputBase + suffix + ".pdf");
 
   // make a canvas to check individual clone types more in detail
   TCanvas* canvas3 = new TCanvas("c3", "Clone Types", 1200, 1000);
@@ -515,7 +519,7 @@ void plot_clone_histos() {
   seedingCloneStack->Add(h_seedingClones4MCByEta);
   seedingCloneStack->Draw("HIST");
   // Add legend for seeding clone stack
-  TLegend* seedingCloneLegend = new TLegend(0.2, 0.3, 0.4, 0.5);
+  TLegend* seedingCloneLegend = new TLegend(0.35, 0.3, 0.55, 0.5);
   seedingCloneLegend->AddEntry(h_seedingClonesMCByEta, "1 -M- 1", "f");
   seedingCloneLegend->AddEntry(h_seedingClones2MCByEta, "#leq2 -M- #leq2", "f");
   seedingCloneLegend->AddEntry(h_seedingClones3MCByEta, "#leq3 -M- #leq3", "f");
@@ -535,7 +539,7 @@ void plot_clone_histos() {
   seedingCloneRecoStack->Add(h_seedingClones4RecoByEta);
   seedingCloneRecoStack->Draw("HIST");
   // Add legend for seeding clone stack
-  TLegend* seedingCloneRecoLegend = new TLegend(0.2, 0.3, 0.4, 0.5);
+  TLegend* seedingCloneRecoLegend = new TLegend(0.35, 0.3, 0.55, 0.5);
   seedingCloneRecoLegend->AddEntry(h_seedingClonesRecoByEta, "1 -M- 1", "f");
   seedingCloneRecoLegend->AddEntry(h_seedingClones2RecoByEta, "#leq2 -M- #leq2", "f");
   seedingCloneRecoLegend->AddEntry(h_seedingClones3RecoByEta, "#leq3 -M- #leq3", "f");
@@ -551,7 +555,7 @@ void plot_clone_histos() {
   tripletCloneStack->Add(h_tripletClonesPlusMCByEta);
   tripletCloneStack->Draw("HIST");
   // Add legend for triplet clone stack
-  TLegend* tripletCloneLegend = new TLegend(0.2, 0.3, 0.4, 0.5);
+  TLegend* tripletCloneLegend = new TLegend(0.35, 0.3, 0.55, 0.5);
   tripletCloneLegend->AddEntry(h_tripletClonesMCByEta, "All Triplets", "f");
   tripletCloneLegend->AddEntry(h_tripletClonesPlusMCByEta, "One not triplet", "f");
   tripletCloneLegend->Draw();
@@ -564,13 +568,13 @@ void plot_clone_histos() {
   tripletCloneRecoStack->Add(h_tripletClonesRecoByEta);
   tripletCloneRecoStack->Add(h_tripletClonesPlusRecoByEta);
   tripletCloneRecoStack->Draw("HIST");
-  TLegend* tripletCloneRecoLegend = new TLegend(0.2, 0.3, 0.4, 0.5);
+  TLegend* tripletCloneRecoLegend = new TLegend(0.35, 0.3, 0.55, 0.5);
   tripletCloneRecoLegend->AddEntry(h_tripletClonesRecoByEta, "All Triplets", "f");
   tripletCloneRecoLegend->AddEntry(h_tripletClonesPlusRecoByEta, "One not triplet", "f");
   tripletCloneRecoLegend->Draw();
 
-  canvas3->SaveAs(
-    (Utils::Definitions::analysisRoot + "/output/clone_types_detailed.pdf").c_str());
+  TString cloneTypesOutputBase = outputBase + TString("clone_types_detailed");
+  canvas3->SaveAs(cloneTypesOutputBase + suffix + ".pdf");
 
   // clean up
   file->Close();

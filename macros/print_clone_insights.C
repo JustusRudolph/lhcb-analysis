@@ -8,12 +8,13 @@
 
 #include "utils/definitions.h"
 #include "utils/basic_functions.h"
+#include "utils/allen_functions.h"
 #include "utils/Hit.h"
 
 void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
                           unsigned nClonesMaximum=20, unsigned nHitsMinimum=3,
-                          unsigned nHitsMaximum=8, bool printRecoIDs=false,
-                          std::string mcFilePath="output/MCData_Checking5000.root") {
+                          unsigned nHitsMaximum=8, bool phi_as_int = false,
+                          std::string mcFilePath="output/MCData_Checking_5000ev_80000nm_0ps.root") {
   // first get module to z conversion histogram
   TFile *moduleFile = TFile::Open(
     (Utils::Definitions::analysisRoot + "hists/module_mc_info.root").c_str());
@@ -96,6 +97,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   recoTrackTree->SetBranchAddress("eta", &recoEta);
   recoTrackTree->SetBranchAddress("chi2", &recoChi2);
 
+  unsigned tempCounter = 0;
   unsigned nRecoTrackLongerThanMC = 0;
   // Now let's go through all MC tracks
   unsigned nMCTracks = mcTrackTree->GetEntries();
@@ -117,11 +119,14 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       unsigned mc_lhcbid = mcTrackLHCbIDs->at(i_lhcbid);
       unsigned moduleNumber = (mc_lhcbid >> 12) & 0x3F;
       float phi = TMath::ATan2(y_mc->at(i_lhcbid), x_mc->at(i_lhcbid));
-      if (printRecoIDs)
-        mcTrackString += Form("%u (%u)", moduleNumber, mc_lhcbid);
-      else
+      if (phi_as_int) {
+        int16_t phi_i16 = Utils::Functions::hit_phi_float_to_16(phi);
         mcTrackString +=
-          Form("%u (phi=%.3f, t=%.3f)", moduleNumber, phi, t_mc->at(i_lhcbid));
+          Form("%u (id=%u, phi=%d, t=%.3f)", moduleNumber, mc_lhcbid, phi_i16, t_mc->at(i_lhcbid));
+      } else {
+        mcTrackString +=
+          Form("%u (id=%u, phi=%.3f, t=%.3f)", moduleNumber, mc_lhcbid, phi, t_mc->at(i_lhcbid));
+      }
       if (i_lhcbid != mcTrackLHCbIDs->size() - 1) mcTrackString += ", ";
     }
     mcTrackString += Form("} has %u clones.\n", nMatches-1);
@@ -154,19 +159,29 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       kTotalIDs += nRecoHits;
 
       mcTrackString +=
-        Form("Run %u, Ev %u, Reco Track %u with %u hits, chi2 %.3f & eta %.3f: {",
+        Form("Run %u, Ev %u, Reco Track %u with %u hits, chi2 %.3f & eta %.3f: {\n",
              recoTrackRunNo, recoTrackEvNo, matchIdx, nRecoHits, recoChi2, recoEta);
       for (unsigned int i_hit_reco = 0; i_hit_reco < nRecoHits; i_hit_reco++) {
         unsigned reco_lhcbid = recoTrackLHCbIDs->at(i_hit_reco);
+        tempCounter += reco_lhcbid == 2953011330;
         unsigned moduleNumber = (reco_lhcbid >> 12) & 0x3F;
         float phi = TMath::ATan2(y_reco->at(i_hit_reco), x_reco->at(i_hit_reco));
         mcTrackLHCbIDsSet.erase(reco_lhcbid);
         // print either the reco ID or the phi and time
-        if (printRecoIDs)
-          mcTrackString += Form("%u (%u", moduleNumber, reco_lhcbid);
-        else
+        // print z too (also need this to predict phi later)
+        float z = moduleToZ->GetBinContent(moduleNumber + 1);  // +1 because ROOT 1 indexed
+        mcTrackString += Form("\t\t");
+
+        if (phi_as_int) {
+          int16_t phi_i16 = Utils::Functions::hit_phi_float_to_16(phi);
+          mcTrackString += Form("%u (id=%u, phi=%d", moduleNumber, reco_lhcbid, phi_i16);
+        } else {
           mcTrackString +=
-            Form("%u (phi=%.3f, t=%.3f", moduleNumber, phi, t_reco->at(i_hit_reco));
+            Form("%u (id=%u, phi=%.3f", moduleNumber, reco_lhcbid, phi);
+        }
+        mcTrackString += Form(", (%.3f, %.3f, %.3f) t=%.3f",
+                              x_reco->at(i_hit_reco), y_reco->at(i_hit_reco),
+                              z, t_reco->at(i_hit_reco));
         
         // Also check first three hits to see if we get seeding clones
         if (i_hit_reco == 0) {
@@ -176,8 +191,6 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
         } else if (i_hit_reco == 2) {
           thirdHitLHCbIDs.insert(reco_lhcbid);
         }
-        // predict next phi in case two hits already exist
-        float z = moduleToZ->GetBinContent(moduleNumber + 1);  // +1 because ROOT 1 indexed
         if (i_hit_reco == 0) {
           h1 = Hit::BaseHit(reco_lhcbid, x_reco->at(i_hit_reco), y_reco->at(i_hit_reco), z,
                    t_reco->at(i_hit_reco));
@@ -187,22 +200,34 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
                    t_reco->at(i_hit_reco));
         }
         if (i_hit_reco) {  // after i_hit_reco=1 we have two hits
+          // just get these for printing (and for dz extrapolation)
           float dz = h1.z - h0.z;
           float dx = (h1.x - h0.x);
           float dy = (h1.y - h0.y);
           float dxdz = dx / dz;
           float dydz = dy / dz;
-          // take difference to h0, that way we get longer interpolation (same as in real alg)
-          float dz_to_next_module = moduleToZ->GetBinContent(moduleNumber + 2) - h0.z;
-          float predx = dxdz * dz_to_next_module;
-          float predy = dydz * dz_to_next_module;
-          float x_prediction = h0.x + predx;
-          float y_prediction = h0.y + predy;
-          float track_extrapolation_phi = TMath::ATan2(y_prediction, x_prediction);
-          mcTrackString += Form(", pred_phi=%.3f)", track_extrapolation_phi);
+          // take difference wrt h0, that way we get longer interpolation (same as in real alg)
+          float dz_to_next_module = 0;
+          if (dz < 0 && moduleNumber > 1) {
+            // track moving forwards, trace out detector backwards (this is what we shoudl always do)
+            // jump by steps of 2 since dealing with module pairs
+            dz_to_next_module = moduleToZ->GetBinContent(moduleNumber - 1) - h0.z;
+          } else {
+            // detector being traced forwards
+            dz_to_next_module = moduleToZ->GetBinContent(moduleNumber + 3) - h0.z;
+          }
+          float track_extrapolation_phi = Hit::estimateNextPhi(h0, h1, dz_to_next_module);
+
+          mcTrackString += Form(", tx=%.3f, ty=%.3f, dz=%.3f", dxdz, dydz, dz_to_next_module);
+          if (phi_as_int) {
+            int16_t phi_i16 = Utils::Functions::hit_phi_float_to_16(track_extrapolation_phi);
+            mcTrackString += Form(", pred_phi=%d", phi_i16);
+          } else {
+            mcTrackString += Form(", pred_phi=%.3f", track_extrapolation_phi);
+          }
         } else
           mcTrackString += ")";  // close the phi, t paranthesis
-        if (i_hit_reco != nRecoHits - 1) mcTrackString += ", ";
+        if (i_hit_reco != nRecoHits - 1) mcTrackString += ",\n";
       }
       mcTrackString += "}\n";
     }
@@ -318,6 +343,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       std::cout << mcTrackString;
     }
   }
+  printf("LHCbID 2953011330 used %u time(s).\n", tempCounter);
   printf("Largest and smallest times throughout all events: (%.3f, %.3f)\n", t_min, t_max);
   printf("Number of reco tracks longer than MC tracks: %u\n", nRecoTrackLongerThanMC);
 
