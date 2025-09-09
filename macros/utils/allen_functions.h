@@ -89,5 +89,65 @@ namespace Utils {
 
       return {x_prediction, y_prediction, track_extrapolation_phi};
     }
+
+    float get_drhodz_sign(const Hit::BaseHit h0, const Hit::BaseHit h1) {
+      return (h1.x * h1.x + h1.y * h1.y - h0.x * h0.x - h0.y * h0.y) > 0 ? -1.f : 1.f;
+    }
+
+    std::tuple<float, float> get_slope(const Hit::BaseHit h0, const Hit::BaseHit h1) {
+      float td = 1.0f / (h1.z - h0.z);
+      float txn = (h1.x - h0.x);
+      float tyn = (h1.y - h0.y);
+      float tx = txn * td;
+      float ty = tyn * td;
+      return {tx, ty};
+    }
+
+    std::tuple<float, float, float> get_seeding_dts(const Hit::BaseHit h0, const Hit::BaseHit h1, const Hit::BaseHit h2) {
+      // first get slope and sign (direction of flight)
+      auto [tx, ty] = get_slope(h0, h1);
+      // printf("Slope: (%.3f, %.3f)\n", tx, ty);
+      float dx01 = h1.x - h0.x;
+      float dy01 = h1.y - h0.y;
+      float dz01 = h1.z - h0.z;
+
+      float drhodz_sign = get_drhodz_sign(h0, h1);
+      // from h1 to h0 we go forwards in the detector, so opposite of sign of drhodz
+      float t0_expected = h1.t + drhodz_sign * Definitions::inv_c_mmns * std::sqrt(dx01 * dx01 + dy01 * dy01 + dz01 * dz01);
+      // printf("t1, t0, t0_expected: %.3f, %.3f, %.3f & ", h1.t, h0.t, t0_expected);
+      float dt0 = t0_expected - h0.t;
+      
+      float dt_dz = drhodz_sign * Definitions::inv_c_mmns * std::sqrt(1 + (tx * tx + ty * ty));
+      float dx_midpoint = h2.x - 0.5 * (h1.x + h0.x);
+      float dy_midpoint = h2.y - 0.5 * (h1.y + h0.y);
+      float dz_midpoint = h2.z - 0.5 * (h1.z + h0.z);
+      float dt_dz_midpoint = drhodz_sign * Definitions::inv_c_mmns * std::sqrt(1 + (dx_midpoint * dx_midpoint + dy_midpoint * dy_midpoint) / (dz_midpoint * dz_midpoint) );
+      // printf("dt_dz: %.3f\n", dt_dz);
+      float t2_expected = 0.5 * ( h0.t + h1.t ) + 0.5 * dt_dz * ( h2.z - h0.z + h2.z - h1.z );
+      // printf("t2, t2_expected: %.3f, %.3f\n", h2.t, t2_expected);
+      float dt2 = t2_expected - h2.t;
+
+      
+      float next_t_filtered = ( h2.t + h1.t + h0.t + dt_dz * (2 * h2.t - h1.t - h0.t) ) / 3.;
+      return {next_t_filtered, dt0, dt2};
+    }
+
+    std::tuple<float, float> get_next_filtered_t(const Hit::BaseHit h0, const Hit::BaseHit h1,
+                                                 const Hit::BaseHit h2, const float filtered_t,
+                                                 const unsigned n_hits) {
+      // first get slope
+      auto [tx, ty] = get_slope(h0, h1);
+      // now extrapolate
+      float drhodz_sign = get_drhodz_sign(h0, h1);
+      // TODO check how different the dt distr becomes when using 1st order sqrt
+      float dt_dz = drhodz_sign * Definitions::inv_c_mmns * std::sqrt(1 + (tx * tx + ty * ty));
+      float dz = h2.z - h1.z;
+      // printf("dt_dz: %.3f, dz: %.3f, h1.t: %.3f, h2.t: %.3f,", dt_dz, dz, h1.t, h2.t);
+      float dt = (filtered_t + dt_dz * dz) - h2.t;
+      float next_t_filtered = (h2.t + n_hits * ( dt_dz * dz + filtered_t ) ) / ( n_hits + 1 );
+      // printf("\t\tdt: %.3f, filtered_t: %.3f, next_t_filtered: %.3f\n", dt, filtered_t, next_t_filtered);
+      return {next_t_filtered, dt};
+    }
   }
 }
+
