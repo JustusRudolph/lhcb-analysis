@@ -11,13 +11,20 @@
 #include "utils/basic_functions.h"
 
 
-void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0) {
+void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, 
+                       unsigned max_dt=0, TString mc_suffix="") {
   gROOT->SetBatch();  // so stuff isn't autoplotted
-  TString suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
-  TString input_suffix = suffix + ".root";
+  TString suffix;
+  if (mc_suffix.IsNull()) {
+    suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
+  } else {
+    suffix = Form("_%uev_%s", nEvents, mc_suffix.Data());
+  }
   TString mcHistParent = (Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str();
-  TFile* file = TFile::Open(mcHistParent + input_suffix);
-  std::cout << "Opened file: " << mcHistParent + input_suffix << std::endl;
+  TString histosPath = mcHistParent + suffix + ".root";
+
+  TFile* file = TFile::Open(histosPath);
+  std::cout << "Opened file: " << histosPath << std::endl;
 
   TProfile* hDuplicateIDRates = (TProfile*) file->Get("duplicate_match_id");
   TProfile* hUniqueIDRates = (TProfile*) file->Get("unique_id_match_rate");
@@ -76,6 +83,10 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   TProfile* tripletClonesPlusRecoByEta = (TProfile*) file->Get("triplet_clones_plus_reco_by_eta");
   TProfile* moduleOverlapClonesRecoByEta = (TProfile*) file->Get("module_overlap_clones_reco_by_eta");
   TProfile* otherClonesRecoByEta = (TProfile*) file->Get("other_clones_reco_by_eta");
+  TProfile* cloneRateByMCPSize_forward = (TProfile*) file->Get("clone_rate_by_mc_p_size_forward");
+  TProfile* cloneRateByMCPSize_backward = (TProfile*) file->Get("clone_rate_by_mc_p_size_backward");
+  TProfile* cloneRateByMCPSize_forward_scaled = (TProfile*) file->Get("clone_rate_by_mc_p_size_forward_scaled");
+  TProfile* cloneRateByMCPSize_backward_scaled = (TProfile*) file->Get("clone_rate_by_mc_p_size_backward_scaled");
   // Convert Profiles to Histograms
   TH1D* h_splitTrackClonesMCByEta = Utils::Functions::profileToHist(
     splitTrackClonesMCByEta, "splitTrackClonesMCByEta");
@@ -121,6 +132,14 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
     moduleOverlapClonesRecoByEta, "moduleOverlapClonesRecoByEta");
   TH1D* h_otherClonesRecoByEta = Utils::Functions::profileToHist(
     otherClonesRecoByEta, "otherClonesRecoByEta");
+  TH1D* h_cloneRateByMCPSize_forward = Utils::Functions::profileToHist(
+    cloneRateByMCPSize_forward, "cloneRateByMCPSize_forward");
+  TH1D* h_cloneRateByMCPSize_backward = Utils::Functions::profileToHist(
+    cloneRateByMCPSize_backward, "cloneRateByMCPSize_backward");
+  TH1D* h_cloneRateByMCPSize_forward_scaled = Utils::Functions::profileToHist(
+    cloneRateByMCPSize_forward_scaled, "cloneRateByMCPSize_forward_scaled");
+  TH1D* h_cloneRateByMCPSize_backward_scaled = Utils::Functions::profileToHist(
+    cloneRateByMCPSize_backward_scaled, "cloneRateByMCPSize_backward_scaled");
   printf("Got all clone type profiles wrt eta from file and converted to histograms.\n");
 
   // clone hit distributions
@@ -388,14 +407,42 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   hLongestMatchedTrackRate5Clones->SetLineColor(kBlue);
   hLongestMatchedTrackRate5Clones->Draw("SAME");
   // Add legend
-  TLegend* legend = new TLegend(0.2, 0.2, 0.4, 0.4);
-  legend->AddEntry(hLongestMatchedTrackRate, "No clones", "l");
-  legend->AddEntry(hLongestMatchedTrackRateClones, "1 #leq N_{clones} #leq 5", "l");
-  legend->AddEntry(hLongestMatchedTrackRate5Clones, "N_{clones} > 5", "l");
-  legend->Draw();
+  TLegend* leg_lmtRate = new TLegend(0.35, 0.2, 0.55, 0.4);
+  leg_lmtRate->AddEntry(hLongestMatchedTrackRate, "No clones", "l");
+  leg_lmtRate->AddEntry(hLongestMatchedTrackRateClones, "1 #leq N_{clones} #leq 5", "l");
+  leg_lmtRate->AddEntry(hLongestMatchedTrackRate5Clones, "N_{clones} > 5", "l");
+  leg_lmtRate->Draw();
 
+  // clone rate wrt MCP track length
   canvas->cd(3);
-  hNMatches->Draw();
+  h_cloneRateByMCPSize_forward->SetLineColor(kRed);
+  h_cloneRateByMCPSize_backward->SetLineColor(kBlue);
+  h_cloneRateByMCPSize_forward_scaled->SetLineColor(kRed);
+  h_cloneRateByMCPSize_backward_scaled->SetLineColor(kBlue);
+  h_cloneRateByMCPSize_forward->SetMarkerColor(kRed);
+  h_cloneRateByMCPSize_backward->SetMarkerColor(kBlue);
+  h_cloneRateByMCPSize_forward_scaled->SetMarkerColor(kRed);
+  h_cloneRateByMCPSize_backward_scaled->SetMarkerColor(kBlue);
+  h_cloneRateByMCPSize_forward->SetMarkerStyle(21);
+  h_cloneRateByMCPSize_backward->SetMarkerStyle(21);
+  h_cloneRateByMCPSize_forward_scaled->SetMarkerStyle(22);
+  h_cloneRateByMCPSize_backward_scaled->SetMarkerStyle(22);
+  h_cloneRateByMCPSize_forward->Draw("P");
+  h_cloneRateByMCPSize_backward->Draw("P SAME");
+  h_cloneRateByMCPSize_forward_scaled->Draw("P SAME");
+  h_cloneRateByMCPSize_backward_scaled->Draw("P SAME");
+  h_cloneRateByMCPSize_forward->GetYaxis()->SetRangeUser(0.01, 0.8);
+  // set y axis to log scale
+  gPad->SetLogy(1);
+
+  // Add legend
+  TLegend* leg_cl_wrt_mcp_size = new TLegend(0.15, 0.6, 0.35, 0.8);
+  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_forward, "Forward", "P");
+  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_backward, "Backward", "P");
+  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_forward_scaled, "Forward scaled", "P");
+  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_backward_scaled, "Backward scaled", "P");
+  leg_cl_wrt_mcp_size->Draw();
+
   canvas->cd(4);
   p_cloneRate->SetLineColor(kMagenta);
   p_cloneRate->GetYaxis()->SetRangeUser(0., 0.2);
@@ -405,7 +452,8 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   TString cloneOutputBase = outputBase + TString("mc_clone_plots");
   canvas->SaveAs(cloneOutputBase + suffix + ".pdf");
   delete canvas;
-  delete legend;
+  delete leg_lmtRate;
+  delete leg_cl_wrt_mcp_size;
 
   // make another canvas for the clone distributions
   TCanvas* canvas2 = new TCanvas("c2", "Clone Distributions", 1200, 1000);

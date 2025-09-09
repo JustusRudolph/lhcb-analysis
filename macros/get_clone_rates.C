@@ -12,11 +12,17 @@
 
 // max_dt is in picoseconds and scatter in micrometers
 void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
-                     unsigned kEventsPerRun=200) {
-  TString suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
-  TString input_suffix = suffix + ".root";
+                     TString mc_file_suffix="", unsigned kEventsPerRun=200) {
+  TString input_suffix;
+  if (mc_file_suffix.IsNull()) {
+    TString suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
+    input_suffix = suffix + ".root";
+  } else {
+    input_suffix = Form("_%uev_%s.root", nEvents, mc_file_suffix.Data());
+  }
   TString input_prefix = (Utils::Definitions::stackRoot + "output/MCData_Checking").c_str();
   TString filepath = input_prefix + input_suffix;
+
   TFile *file = TFile::Open(filepath);
   if (!file || file->IsZombie()) {
     std::cerr << "Error: Could not open ROOT file." << std::endl;
@@ -234,6 +240,21 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   TProfile* otherClonesRecoByEta = new TProfile(
     "other_clones_reco_by_eta", "Other Clones by #eta;#eta;Clone Rate",
     nEtaBins, etaBinEdges.data());
+  // clone rates by the size/length of MC track
+  TProfile* cloneRateByMCPSize_forward = new TProfile(
+    "clone_rate_by_mc_p_size_forward", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
+    nHitBins, hitBinEdges.data());
+  TProfile* cloneRateByMCPSize_backward = new TProfile(
+    "clone_rate_by_mc_p_size_backward", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
+    nHitBins, hitBinEdges.data());
+  // following two are the same as above but scaled down by number of clones
+  // i.e. it does not matter how many clones there are, it's either clone or no clone
+  TProfile* cloneRateByMCPSize_forward_scaled = new TProfile(
+    "clone_rate_by_mc_p_size_forward_scaled", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
+    nHitBins, hitBinEdges.data());
+  TProfile* cloneRateByMCPSize_backward_scaled = new TProfile(
+    "clone_rate_by_mc_p_size_backward_scaled", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
+    nHitBins, hitBinEdges.data());
   // also do Histograms for the number of hits per clone type
   TH1D* seedingCloneMCHitDistr = new TH1D(
     "seeding_clone_mc_hit_distribution", "Seeding Clone Hit Distribution;N_{hits};Frequency",
@@ -309,6 +330,8 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   unsigned nTotalForward = 0, nTotalBackward = 0,  // total number of MC tracks
            nTotalRecodForward = 0, nTotalRecodBackward = 0,
            nTotalClonesForward = 0, nTotalClonesBackward = 0;
+
+  unsigned nInteresting = 0;
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
     mcTrackTree->GetEntry(i_mct);
     int mcPID_abs = mcPID < 0 ? -mcPID : mcPID;
@@ -322,12 +345,16 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
       if (nMatches) {  // only add to reconstructed or clone if matched to mc
         nTotalRecodBackward++;
         nTotalClonesBackward += (nMatches - 1);
+        cloneRateByMCPSize_backward->Fill(nMCVeloHits, nMatches - 1);
+        cloneRateByMCPSize_backward_scaled->Fill(nMCVeloHits, nMatches > 1);
       }
     } else {
       nTotalForward++;
       if (nMatches) {
         nTotalRecodForward += (nMatches > 0);
         nTotalClonesForward += (nMatches - 1);
+        cloneRateByMCPSize_forward->Fill(nMCVeloHits, nMatches - 1);
+        cloneRateByMCPSize_forward_scaled->Fill(nMCVeloHits, nMatches > 1);
       }
     }
     if (!nMatches || !matchedRecoTrackIndices) continue;
@@ -399,6 +426,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
                                   (mcTrackLHCbIDsSet.size() == 0 && kTotalIDs == (nMCVeloHits + 2)) ||
                                   (mcTrackLHCbIDsSet.size() == 1 && kTotalIDs == (nMCVeloHits + 1)) ) &&
                                    nMatches > 1;
+    nInteresting += (isSplitTrack_2Missed && nMatches == 2 && nMCVeloHits == 4);
     bool isAnySplitTrack = isSplitTrack || isSplitTrack_1Missed || isSplitTrack_2Missed;
     nSplitTrack2ndTrackFirst += tracksRightOrder && isSplitTrack;
     std::vector<unsigned> firstThreeModules(3, 0);
@@ -685,6 +713,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
     }
   }  // MC Particles loop
   printf("Finished with all MC tracks.\n");
+  printf("Number of interesting (right now 2 clones, 4 hits, NNLO split) tracks: %u\n", nInteresting);
   printf("With %u seeding clones, %u are also triplet clones.\n",
          nSeedingClones, nTripletClones);
   printf("With %u out of %u (%u & %u) split (1 & 2 missed) clones having module overlap.\n",
@@ -731,9 +760,9 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
                         (nTotalForward + nTotalBackward),
          100. * (float) (nTotalGhostsForward + nTotalGhostsBackward) /
                         (nTotalRecoTracksForward + nTotalRecoTracksBackward),
-         100. * (float) (nTotalRecoClonesForward + nTotalRecoClonesBackward) /
-                        ((nTotalRecoClonesForward + nTotalRecodForward) +
-                         (nTotalRecoClonesBackward + nTotalRecodBackward)));
+         100. * (float) (nTotalClonesForward + nTotalClonesBackward) /
+                        ((nTotalClonesForward + nTotalRecodForward) +
+                         (nTotalClonesBackward + nTotalRecodBackward)));
   // write histograms
   TFile* outFile = new TFile(TString((Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str()) +
                               input_suffix, "RECREATE");
@@ -783,6 +812,10 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   splitTrackCloneMCHitDistr->Write();
   splitTrackClone_1MissedMCHitDistr->Write();
   splitTrackClone_2MissedMCHitDistr->Write();
+  cloneRateByMCPSize_forward->Write();
+  cloneRateByMCPSize_backward->Write();
+  cloneRateByMCPSize_forward_scaled->Write();
+  cloneRateByMCPSize_backward_scaled->Write();
   seedingCloneMCHitDistr->Write();
   seedingClone2MCHitDistr->Write();
   seedingClone3MCHitDistr->Write();
