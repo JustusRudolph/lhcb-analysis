@@ -58,7 +58,8 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits,
            recoTrackEvNo, recoTrackRunNo;
   float doca_t_reco, mcEta, recoEta, recoChi2, pt;
-  bool isBackward;
+  bool isBackward, hasVelo;
+  int mcPID;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
   std::vector<unsigned>* mcTrackLHCbIDs = nullptr;
@@ -83,6 +84,8 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   mcTrackTree->SetBranchAddress("y", &y_mc);
   mcTrackTree->SetBranchAddress("eta", &mcEta);
   mcTrackTree->SetBranchAddress("pt", &pt);
+  mcTrackTree->SetBranchAddress("hasVelo", &hasVelo);
+  mcTrackTree->SetBranchAddress("pid", &mcPID);
   // Reco Event Tree
   recoEventTree->SetBranchAddress("globalTrackOffset", &recoEvOffset);
   // Reco Track Tree
@@ -98,11 +101,20 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   recoTrackTree->SetBranchAddress("chi2", &recoChi2);
 
   unsigned tempCounter = 0;
+  unsigned nPrinted = 0;
+  unsigned nInteresting = 0;
   unsigned nRecoTrackLongerThanMC = 0;
   // Now let's go through all MC tracks
   unsigned nMCTracks = mcTrackTree->GetEntries();
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
     mcTrackTree->GetEntry(i_mct);
+    // first check if even reconstructible
+    int mcPID_abs = mcPID < 0 ? -mcPID : mcPID;
+    bool isInAcceptance = (mcEta >= -5 && mcEta <= -2) ||
+                          (mcEta >= 2 && mcEta <= 5);
+    bool isReconstructible = isInAcceptance && hasVelo && (mcPID_abs != 11);  // no e+ or e-
+    if (!isReconstructible) continue;  // skip if not reconstructible
+
     // first just check the time range
     for (unsigned int i_lhcbid = 0; i_lhcbid < mcTrackLHCbIDs->size(); i_lhcbid++) {
       float t = t_mc->at(i_lhcbid);
@@ -112,12 +124,14 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
     if (nMCVeloHits > nHitsMaximum || nMCVeloHits < nHitsMinimum ||
         nMatches <= nClonesMinimum ||  nMatches > (nClonesMaximum+1)) continue;
 
+    std::unordered_set<unsigned> moduleNumbers;
     TString mcTrackString =
       Form("Run %u, Ev %u, MC Track %u at eta %.3f & pT %.3f with %u hits {",
            mcTrackRunNo, mcTrackEvNo, i_mct, mcEta, pt, nMCVeloHits);
     for (unsigned int i_lhcbid = 0; i_lhcbid < mcTrackLHCbIDs->size(); i_lhcbid++) {
       unsigned mc_lhcbid = mcTrackLHCbIDs->at(i_lhcbid);
       unsigned moduleNumber = (mc_lhcbid >> 12) & 0x3F;
+      moduleNumbers.insert(moduleNumber);
       float phi = TMath::ATan2(y_mc->at(i_lhcbid), x_mc->at(i_lhcbid));
       if (phi_as_int) {
         int16_t phi_i16 = Utils::Functions::hit_phi_float_to_16(phi);
@@ -130,6 +144,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       if (i_lhcbid != mcTrackLHCbIDs->size() - 1) mcTrackString += ", ";
     }
     mcTrackString += Form("} has %u clones.\n", nMatches-1);
+    bool containsDuplicateModules = moduleNumbers.size() != mcTrackLHCbIDs->size();
     // Track clone type to print at the end
     unsigned nTriplets = 0;
     unsigned kTotalIDs = 0;
@@ -216,9 +231,10 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
             // detector being traced forwards
             dz_to_next_module = moduleToZ->GetBinContent(moduleNumber + 3) - h0.z;
           }
-          float track_extrapolation_phi = Hit::estimateNextPhi(h0, h1, dz_to_next_module);
+          auto [x_pred, y_pred, track_extrapolation_phi] = Hit::estimateNextPhi(h0, h1, dz_to_next_module);
 
-          mcTrackString += Form(", tx=%.3f, ty=%.3f, dz=%.3f", dxdz, dydz, dz_to_next_module);
+          mcTrackString += Form(", tx=%.3f, ty=%.3f, x_pred=%.3f, y_pred=%.3f",
+                                dxdz, dydz, x_pred, y_pred);
           if (phi_as_int) {
             int16_t phi_i16 = Utils::Functions::hit_phi_float_to_16(track_extrapolation_phi);
             mcTrackString += Form(", pred_phi=%d", phi_i16);
@@ -243,6 +259,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
                                   (mcTrackLHCbIDsSet.size() == 0 && kTotalIDs == (nMCVeloHits + 2)) ||
                                   (mcTrackLHCbIDsSet.size() == 1 && kTotalIDs == (nMCVeloHits + 1)) ) &&
                                    nMatches > 1;
+    nInteresting += (isSplitTrack_2Missed && nMatches == 2 && nMCVeloHits == 4);
     bool isAnySplitTrack = isSplitTrack || isSplitTrack_1Missed || isSplitTrack_2Missed;
     std::vector<unsigned> firstThreeModules(3, 0);
     bool firstThreeHitSameModules = true;
@@ -339,13 +356,15 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
     mcTrackString += "\n\n";
 
     // print the string (change the if here for what you want)
-    if (isSplitTrack) {
+    if (isSplitTrack_2Missed && !containsDuplicateModules) {
       std::cout << mcTrackString;
+      nPrinted++;
     }
   }
+  printf("Number of interesting (right now 2 clones, 4 hits, NNLO split) tracks: %u\n", nInteresting);
   printf("LHCbID 2953011330 used %u time(s).\n", tempCounter);
   printf("Largest and smallest times throughout all events: (%.3f, %.3f)\n", t_min, t_max);
   printf("Number of reco tracks longer than MC tracks: %u\n", nRecoTrackLongerThanMC);
-
+  printf("Number of printed tracks: %u\n", nPrinted);
   return;
 }
