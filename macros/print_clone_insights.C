@@ -11,9 +11,10 @@
 #include "utils/allen_functions.h"
 #include "utils/Hit.h"
 
-void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
-                          unsigned nClonesMaximum=20, unsigned nHitsMinimum=3,
-                          unsigned nHitsMaximum=8, bool phi_as_int = false,
+void print_clone_insights(unsigned kEvents=5000, unsigned kEventsPerRun=200,
+                          unsigned nClonesMinimum=8, unsigned nClonesMaximum=20,
+                          unsigned nHitsMinimum=3, unsigned nHitsMaximum=8,
+                          bool phi_as_int = false,
                           std::string mcFilePath="output/MCData_Checking_5000ev_80000nm_0ps.root") {
   // first get module to z conversion histogram
   TFile *moduleFile = TFile::Open(
@@ -59,7 +60,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
            recoTrackEvNo, recoTrackRunNo;
   float doca_t_reco, mcEta, recoEta, recoChi2, pt;
   bool isBackward, hasVelo;
-  int mcPID;
+  int mcPID, runNoReco;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
   std::vector<unsigned>* mcTrackLHCbIDs = nullptr;
@@ -88,6 +89,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   mcTrackTree->SetBranchAddress("pid", &mcPID);
   // Reco Event Tree
   recoEventTree->SetBranchAddress("globalTrackOffset", &recoEvOffset);
+  recoEventTree->SetBranchAddress("runNo", &runNoReco);
   // Reco Track Tree
   recoTrackTree->SetBranchAddress("evNo", &recoTrackEvNo);
   recoTrackTree->SetBranchAddress("runNo", &recoTrackRunNo);
@@ -99,6 +101,16 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
   recoTrackTree->SetBranchAddress("y", &y_reco);
   recoTrackTree->SetBranchAddress("eta", &recoEta);
   recoTrackTree->SetBranchAddress("chi2", &recoChi2);
+
+  // create map of run number to run index
+  unsigned nRuns = kEvents / kEventsPerRun;
+  std::vector<unsigned> runNumberToRunIndex(nRuns, UINT_MAX); // Initialize with invalid index
+  // loop over all entries, every 200 of which will be a new run
+  for (unsigned i_run = 0; i_run < nRuns; i_run++) {
+    recoEventTree->GetEntry(i_run * kEventsPerRun);
+    // run numbers not zero indexed by default since Gauss0.sim "broken"
+    runNumberToRunIndex[runNoReco - 1] = i_run;  // now zero indexed
+  }
 
   unsigned tempCounter = 0;
   unsigned nPrinted = 0;
@@ -160,7 +172,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       // check if backward or not (using eta is more reliable)
       if (recoEta < 0) mcTrackString += "\t[B] ";
       else mcTrackString += "\t[F] ";
-      unsigned evIdx = (mcTrackRunNo - 1) * kEventsPerRun + (mcTrackEvNo - 1);
+      unsigned evIdx = runNumberToRunIndex[mcTrackRunNo - 1] * kEventsPerRun + (mcTrackEvNo - 1);
       recoEventTree->GetEntry(evIdx);
       unsigned recoTrackIdx = recoEvOffset + matchIdx;
       recoTrackTree->GetEntry(recoTrackIdx);
@@ -343,7 +355,9 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
       mcTrackString +=
         Form("Seeding clone, Sizes: %lu, %lu, %lu",
              firstHitLHCbIDs.size(), secondHitLHCbIDs.size(), thirdHitLHCbIDs.size());
-    } else if (isCloneOfTriplets) {
+    } else if (isAnyTripletClone) {
+      if (isCloneOfTripletsPlus)
+        mcTrackString += "Almost ";
       mcTrackString += "Triplet clone";
     } else if (isCloneOfModuleOverlap) {
       mcTrackString += Form("Module overlap clone, Odd: %u, Even %u",
@@ -356,7 +370,7 @@ void print_clone_insights(unsigned kEventsPerRun=200, unsigned nClonesMinimum=8,
     mcTrackString += "\n\n";
 
     // print the string (change the if here for what you want)
-    if (isSplitTrack_2Missed && !containsDuplicateModules) {
+    if (isAnyTripletClone) {
       std::cout << mcTrackString;
       nPrinted++;
     }
