@@ -103,7 +103,8 @@ namespace Utils {
       return {tx, ty};
     }
 
-    std::tuple<float, float, float> get_seeding_dts(const Hit::BaseHit h0, const Hit::BaseHit h1, const Hit::BaseHit h2) {
+    std::tuple<float, float, float, float>
+    get_seeding_dts(const Hit::BaseHit h0, const Hit::BaseHit h1, const Hit::BaseHit h2) {
       // first get slope and sign (direction of flight)
       auto [tx, ty] = get_slope(h0, h1);
       // printf("Slope: (%.3f, %.3f)\n", tx, ty);
@@ -129,10 +130,10 @@ namespace Utils {
 
       
       float next_t_filtered = ( h2.t + h1.t + h0.t + dt_dz * (2 * h2.t - h1.t - h0.t) ) / 3.;
-      return {next_t_filtered, dt0, dt2};
+      return {next_t_filtered, dt0, dt2, drhodz_sign};
     }
 
-    std::tuple<float, float> get_next_filtered_t(const Hit::BaseHit h0, const Hit::BaseHit h1,
+    std::tuple<float, float, float> get_next_filtered_t(const Hit::BaseHit h0, const Hit::BaseHit h1,
                                                  const Hit::BaseHit h2, const float filtered_t,
                                                  const unsigned n_hits) {
       // first get slope
@@ -146,7 +147,7 @@ namespace Utils {
       float dt = (filtered_t + dt_dz * dz) - h2.t;
       float next_t_filtered = (h2.t + n_hits * ( dt_dz * dz + filtered_t ) ) / ( n_hits + 1 );
       // printf("\t\tdt: %.3f, filtered_t: %.3f, next_t_filtered: %.3f\n", dt, filtered_t, next_t_filtered);
-      return {next_t_filtered, dt};
+      return {next_t_filtered, dt, drhodz_sign};
     }
   }
 }
