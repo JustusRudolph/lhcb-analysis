@@ -74,7 +74,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   // define everything that you will need
   bool isClone, hasVelo;
   unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits;
-  int mcMatchIdxForReco, mcPID;
+  int mcMatchIdxForReco, mcPID, runNoReco, evNoReco;
   float mcEta, recoEta;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
@@ -91,6 +91,8 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   mcTrackTree->SetBranchAddress("nHitsVelo", &nMCVeloHits);
   mcTrackTree->SetBranchAddress("lhcbid", &mcTrackLHCbIDs);
   // Reco Event Tree
+  recoEventTree->SetBranchAddress("runNo", &runNoReco);
+  recoEventTree->SetBranchAddress("evNo", &evNoReco);
   recoEventTree->SetBranchAddress("globalTrackOffset", &recoEvOffset);
   // Reco Track Tree
   recoTrackTree->SetBranchAddress("lhcbid", &recoTrackLHCbIDs);
@@ -98,6 +100,11 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   recoTrackTree->SetBranchAddress("eta", &recoEta);
   recoTrackTree->SetBranchAddress("isClone", &isClone);
 
+
+  // generic hit distribution for all MCs sliced up with same hit bins
+  TH1D* hMCHitDistribution = new TH1D(
+    "mc_hit_distribution", "MC Hit Distribution;N_{hits};Frequency",
+    nHitBins, hitBinEdges.data());
   unsigned nHasVelo{0}, nHasAtLeastOneHit{0},
            nHasAtLeastTwoHits{0}, nHasAtLeastThreeHits{0};
   unsigned nMCTracks = mcTrackTree->GetEntries();
@@ -112,10 +119,25 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
     nHasAtLeastOneHit += (nMCVeloHits > 0);
     nHasAtLeastTwoHits += (nMCVeloHits > 1);
     nHasAtLeastThreeHits += (nMCVeloHits > 2);
+    if (nMCVeloHits < nHitMax) {
+      hMCHitDistribution->Fill(nMCVeloHits);
+    } else {
+      hMCHitDistribution->Fill(nHitMax);
+    }
   }
   printf("Out of %u MC tracks, %u have Velo hits, %u, %u, %u have at least 1,2,3 hits.\n",
          nMCTracks, nHasVelo, nHasAtLeastOneHit, nHasAtLeastTwoHits, nHasAtLeastThreeHits);
   unsigned nRecoWithoutClones = nReco - nMCTracksWithClones;
+
+  // create map of run number to run index
+  unsigned nRuns = nEvents / kEventsPerRun;
+  std::vector<unsigned> runNumberToRunIndex(nRuns, UINT_MAX); // Initialize with invalid index
+  // loop over all entries, every 200 of which will be a new run
+  for (unsigned i_run = 0; i_run < nRuns; i_run++) {
+    recoEventTree->GetEntry(i_run * kEventsPerRun);
+    // run numbers not zero indexed by default since Gauss0.sim "broken"
+    runNumberToRunIndex[runNoReco - 1] = i_run;  // now zero indexed
+  }
 
   TProfile* hDuplicateIDRates = new TProfile(
     "duplicate_match_id", "Duplicate match ID rate;#eta;DuplicateIDRate",
@@ -240,15 +262,27 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   TProfile* otherClonesRecoByEta = new TProfile(
     "other_clones_reco_by_eta", "Other Clones by #eta;#eta;Clone Rate",
     nEtaBins, etaBinEdges.data());
-  // clone rates by the size/length of MC track
+  // clone rates and absolute numbers of clones by the size/length of MC track
+  TH1D* nClonesByMCPSize_forward = new TH1D(
+    "n_clones_by_mc_p_size_forward", "Number of Clones by number of MCP hits;N_{hits};Number of Clones",
+    nHitBins, hitBinEdges.data());
+  TH1D* nClonesByMCPSize_backward = new TH1D(
+    "n_clones_by_mc_p_size_backward", "Number of Clones by number of MCP hits;N_{hits};Number of Clones",
+    nHitBins, hitBinEdges.data());
   TProfile* cloneRateByMCPSize_forward = new TProfile(
     "clone_rate_by_mc_p_size_forward", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
     nHitBins, hitBinEdges.data());
   TProfile* cloneRateByMCPSize_backward = new TProfile(
     "clone_rate_by_mc_p_size_backward", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
     nHitBins, hitBinEdges.data());
-  // following two are the same as above but scaled down by number of clones
+  // following four are the same as above but scaled down by number of clones
   // i.e. it does not matter how many clones there are, it's either clone or no clone
+  TH1D* nClonesByMCPSize_forward_scaled = new TH1D(
+    "n_clones_by_mc_p_size_forward_scaled", "Number of Clones by number of MCP hits;N_{hits};Number of Clones",
+    nHitBins, hitBinEdges.data());
+  TH1D* nClonesByMCPSize_backward_scaled = new TH1D(
+    "n_clones_by_mc_p_size_backward_scaled", "Number of Clones by number of MCP hits;N_{hits};Number of Clones",
+    nHitBins, hitBinEdges.data());
   TProfile* cloneRateByMCPSize_forward_scaled = new TProfile(
     "clone_rate_by_mc_p_size_forward_scaled", "Clone Rate by number of MCP hits;N_{hits};Clone Rate",
     nHitBins, hitBinEdges.data());
@@ -347,6 +381,8 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
         nTotalClonesBackward += (nMatches - 1);
         cloneRateByMCPSize_backward->Fill(nMCVeloHits, nMatches - 1);
         cloneRateByMCPSize_backward_scaled->Fill(nMCVeloHits, nMatches > 1);
+        nClonesByMCPSize_backward->Fill(nMCVeloHits, nMatches - 1);
+        nClonesByMCPSize_backward_scaled->Fill(nMCVeloHits, nMatches > 1);
       }
     } else {
       nTotalForward++;
@@ -355,6 +391,8 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
         nTotalClonesForward += (nMatches - 1);
         cloneRateByMCPSize_forward->Fill(nMCVeloHits, nMatches - 1);
         cloneRateByMCPSize_forward_scaled->Fill(nMCVeloHits, nMatches > 1);
+        nClonesByMCPSize_forward->Fill(nMCVeloHits, nMatches - 1);
+        nClonesByMCPSize_forward_scaled->Fill(nMCVeloHits, nMatches > 1);
       }
     }
     if (!nMatches || !matchedRecoTrackIndices) continue;
@@ -375,7 +413,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
     std::unordered_set<unsigned> thirdHitLHCbIDs;
     for (unsigned i_rt = 0; i_rt < nMatches; i_rt++) {
       unsigned matchIdx = matchedRecoTrackIndices->at(i_rt);
-      unsigned evIdx = (mcTrackRunNo - 1) * kEventsPerRun + (mcTrackEvNo - 1);
+      unsigned evIdx = runNumberToRunIndex[mcTrackRunNo - 1] * kEventsPerRun + (mcTrackEvNo - 1);
       recoEventTree->GetEntry(evIdx);
       unsigned recoTrackIdx = recoEvOffset + matchIdx;
       recoTrackTree->GetEntry(recoTrackIdx);
@@ -766,6 +804,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   // write histograms
   TFile* outFile = new TFile(TString((Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str()) +
                               input_suffix, "RECREATE");
+  hMCHitDistribution->Write();
   hDuplicateIDRates->Write();
   hUniqueIDRates->Write();
   hLongestMatchedTrackRate->Write();
@@ -812,6 +851,10 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   splitTrackCloneMCHitDistr->Write();
   splitTrackClone_1MissedMCHitDistr->Write();
   splitTrackClone_2MissedMCHitDistr->Write();
+  nClonesByMCPSize_forward->Write();
+  nClonesByMCPSize_backward->Write();
+  nClonesByMCPSize_forward_scaled->Write();
+  nClonesByMCPSize_backward_scaled->Write();
   cloneRateByMCPSize_forward->Write();
   cloneRateByMCPSize_backward->Write();
   cloneRateByMCPSize_forward_scaled->Write();

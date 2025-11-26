@@ -26,6 +26,7 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   TFile* file = TFile::Open(histosPath);
   std::cout << "Opened file: " << histosPath << std::endl;
 
+  TH1D* hMCHitDistribution = (TH1D*) file->Get("mc_hit_distribution");
   TProfile* hDuplicateIDRates = (TProfile*) file->Get("duplicate_match_id");
   TProfile* hUniqueIDRates = (TProfile*) file->Get("unique_id_match_rate");
   TProfile* hLongestMatchedTrackRate = (TProfile*) file->Get("longest_matched_track_fraction");
@@ -83,6 +84,10 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   TProfile* tripletClonesPlusRecoByEta = (TProfile*) file->Get("triplet_clones_plus_reco_by_eta");
   TProfile* moduleOverlapClonesRecoByEta = (TProfile*) file->Get("module_overlap_clones_reco_by_eta");
   TProfile* otherClonesRecoByEta = (TProfile*) file->Get("other_clones_reco_by_eta");
+  TH1D* nClonesByMCPSize_forward = (TH1D*) file->Get("n_clones_by_mc_p_size_forward");
+  TH1D* nClonesByMCPSize_backward = (TH1D*) file->Get("n_clones_by_mc_p_size_backward");
+  TH1D* nClonesByMCPSize_forward_scaled = (TH1D*) file->Get("n_clones_by_mc_p_size_forward_scaled");
+  TH1D* nClonesByMCPSize_backward_scaled = (TH1D*) file->Get("n_clones_by_mc_p_size_backward_scaled");
   TProfile* cloneRateByMCPSize_forward = (TProfile*) file->Get("clone_rate_by_mc_p_size_forward");
   TProfile* cloneRateByMCPSize_backward = (TProfile*) file->Get("clone_rate_by_mc_p_size_backward");
   TProfile* cloneRateByMCPSize_forward_scaled = (TProfile*) file->Get("clone_rate_by_mc_p_size_forward_scaled");
@@ -202,9 +207,11 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   clonesMCSum->Add(h_otherClonesMCByEta);
   // Add legend for MC clone stack
   TLegend* mcCloneLegend = new TLegend(0.35, 0.5, 0.55, 0.7);
-  mcCloneLegend->AddEntry(h_splitTrackClonesMCByEta, "LO Split Track", "f");
-  mcCloneLegend->AddEntry(h_splitTrackClones_1MissedMCByEta, "NLO Split track", "f");
-  mcCloneLegend->AddEntry(h_splitTrackClones_2MissedMCByEta, "NNLO Split track", "f");
+  // remove edges from legend
+  mcCloneLegend->SetBorderSize(0);
+  mcCloneLegend->AddEntry(h_splitTrackClonesMCByEta, "1x Split Track", "f");
+  mcCloneLegend->AddEntry(h_splitTrackClones_1MissedMCByEta, "2x Split Track", "f");
+  mcCloneLegend->AddEntry(h_splitTrackClones_2MissedMCByEta, "3x Split Track", "f");
   mcCloneLegend->AddEntry(h_seedingClonesMCByEtaSummed, "Seeding", "f");
   mcCloneLegend->AddEntry(h_tripletClonesMCByEtaSummed, "Triplet", "f");
   mcCloneLegend->AddEntry(h_moduleOverlapClonesMCByEta, "Module overlap", "f");
@@ -235,9 +242,10 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   clonesRecoSum->Add(h_otherClonesRecoByEta);
   // Add legend for Reco clone stack
   TLegend* recoCloneLegend = new TLegend(0.35, 0.5, 0.55, 0.7);
-  recoCloneLegend->AddEntry(h_splitTrackClonesRecoByEta, "LO Split Track", "f");
-  recoCloneLegend->AddEntry(h_splitTrackClones_1MissedRecoByEta, "NLO split track", "f");
-  recoCloneLegend->AddEntry(h_splitTrackClones_2MissedRecoByEta, "NNLO split track", "f");
+  recoCloneLegend->SetBorderSize(0);
+  recoCloneLegend->AddEntry(h_splitTrackClonesRecoByEta, "1x Split Track", "f");
+  recoCloneLegend->AddEntry(h_splitTrackClones_1MissedRecoByEta, "2x Split Track", "f");
+  recoCloneLegend->AddEntry(h_splitTrackClones_2MissedRecoByEta, "3x Split Track", "f");
   recoCloneLegend->AddEntry(h_seedingClonesRecoByEtaSummed, "Seeding", "f");
   recoCloneLegend->AddEntry(h_tripletClonesRecoByEtaSummed, "Triplet", "f");
   recoCloneLegend->AddEntry(h_moduleOverlapClonesRecoByEta, "Module overlap", "f");
@@ -270,9 +278,10 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   cloneDistrStack->Add(hOverlapCloneDistribution);
   // Add legend for clone distribution stack
   TLegend* cloneDistrLegend = new TLegend(0.6, 0.4, 0.8, 0.6);
-  cloneDistrLegend->AddEntry(hSplitTrackCloneDistribution, "LO Split Track", "f");
-  cloneDistrLegend->AddEntry(hSplitTrackClone_1MissedDistribution, "NLO split track", "f");
-  cloneDistrLegend->AddEntry(hSplitTrackClone_2MissedDistribution, "NNLO split track", "f");
+  cloneDistrLegend->SetBorderSize(0);
+  cloneDistrLegend->AddEntry(hSplitTrackCloneDistribution, "1x Split Track", "f");
+  cloneDistrLegend->AddEntry(hSplitTrackClone_1MissedDistribution, "2x Split Track", "f");
+  cloneDistrLegend->AddEntry(hSplitTrackClone_2MissedDistribution, "3x Split Track", "f");
   cloneDistrLegend->AddEntry(hSeedingCloneDistributionSummed, "Seeding", "f");
   cloneDistrLegend->AddEntry(hTripletCloneDistributionSummed, "Triplet", "f");
   cloneDistrLegend->AddEntry(hOverlapCloneDistribution, "Module overlap", "f");
@@ -394,24 +403,62 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
 
   gStyle->SetOptStat(0);  // remove the info box
   canvas->cd(1);
-  hDuplicateIDRates->Draw();
+  // hDuplicateIDRates->Draw();
+  nClonesByMCPSize_forward->SetLineColor(kRed);
+  nClonesByMCPSize_backward->SetLineColor(kBlue);
+  nClonesByMCPSize_forward_scaled->SetLineColor(kRed);
+  nClonesByMCPSize_backward_scaled->SetLineColor(kBlue);
+  nClonesByMCPSize_forward->SetMarkerColor(kRed);
+  nClonesByMCPSize_backward->SetMarkerColor(kBlue);
+  nClonesByMCPSize_forward_scaled->SetMarkerColor(kRed);
+  nClonesByMCPSize_backward_scaled->SetMarkerColor(kBlue);
+  nClonesByMCPSize_forward->SetMarkerStyle(21);
+  nClonesByMCPSize_backward->SetMarkerStyle(21);
+  nClonesByMCPSize_forward_scaled->SetMarkerStyle(22);
+  nClonesByMCPSize_backward_scaled->SetMarkerStyle(22);
+  // scale by the number of events to get clones/event (consistent)
+  nClonesByMCPSize_forward->Scale(1./nEvents);
+  nClonesByMCPSize_backward->Scale(1./nEvents);
+  nClonesByMCPSize_forward_scaled->Scale(1./nEvents);
+  nClonesByMCPSize_backward_scaled->Scale(1./nEvents);
+  nClonesByMCPSize_forward->SetTitle("N_{clones}/Event by N_{MCP hits}");
+  nClonesByMCPSize_forward->Draw("P");
+  nClonesByMCPSize_backward->Draw("P SAME");
+  nClonesByMCPSize_forward_scaled->Draw("P SAME");
+  nClonesByMCPSize_backward_scaled->Draw("P SAME");
+  nClonesByMCPSize_forward->GetYaxis()->SetRangeUser(0.001, 10.);
+  gPad->SetLogy(1);
+  // Add legend
+  TLegend* leg_Nclones_wrt_mcp_size = new TLegend(0.2, 0.2, 0.4, 0.4);
+  leg_Nclones_wrt_mcp_size->AddEntry(nClonesByMCPSize_forward, "Forward", "P");
+  leg_Nclones_wrt_mcp_size->AddEntry(nClonesByMCPSize_backward, "Backward", "P");
+  leg_Nclones_wrt_mcp_size->AddEntry(nClonesByMCPSize_forward_scaled, "Forward scaled", "P");
+  leg_Nclones_wrt_mcp_size->AddEntry(nClonesByMCPSize_backward_scaled, "Backward scaled", "P");
+  leg_Nclones_wrt_mcp_size->Draw();
+
   canvas->cd(2);
   // hUniqueIDRates->Draw(); <-- this is just the 1- of the above duplicate rate
   // set line colours and plot all histograms
-  hLongestMatchedTrackRate->SetLineColor(kBlack);
-  hLongestMatchedTrackRate->Draw();
+  // hLongestMatchedTrackRate->SetLineColor(kBlack);
+  // hLongestMatchedTrackRate->Draw();
 
-  hLongestMatchedTrackRateClones->SetLineColor(kMagenta);
-  hLongestMatchedTrackRateClones->Draw("SAME");
+  // hLongestMatchedTrackRateClones->SetLineColor(kMagenta);
+  // hLongestMatchedTrackRateClones->Draw("SAME");
 
-  hLongestMatchedTrackRate5Clones->SetLineColor(kBlue);
-  hLongestMatchedTrackRate5Clones->Draw("SAME");
-  // Add legend
-  TLegend* leg_lmtRate = new TLegend(0.35, 0.2, 0.55, 0.4);
-  leg_lmtRate->AddEntry(hLongestMatchedTrackRate, "No clones", "l");
-  leg_lmtRate->AddEntry(hLongestMatchedTrackRateClones, "1 #leq N_{clones} #leq 5", "l");
-  leg_lmtRate->AddEntry(hLongestMatchedTrackRate5Clones, "N_{clones} > 5", "l");
-  leg_lmtRate->Draw();
+  // hLongestMatchedTrackRate5Clones->SetLineColor(kBlue);
+  // hLongestMatchedTrackRate5Clones->Draw("SAME");
+  // // Add legend
+  // TLegend* leg_lmtRate = new TLegend(0.35, 0.2, 0.55, 0.4);
+  // leg_lmtRate->AddEntry(hLongestMatchedTrackRate, "No clones", "l");
+  // leg_lmtRate->AddEntry(hLongestMatchedTrackRateClones, "1 #leq N_{clones} #leq 5", "l");
+  // leg_lmtRate->AddEntry(hLongestMatchedTrackRate5Clones, "N_{clones} > 5", "l");
+  // leg_lmtRate->Draw();
+
+  // plot the generic hit distribution
+  hMCHitDistribution->SetLineColor(kBlack);
+  hMCHitDistribution->SetTitle("Hit distribution of all MCs");
+  // hMCHitDistribution->GetXaxis()->SetRangeUser(3, 15);
+  hMCHitDistribution->Draw();
 
   // clone rate wrt MCP track length
   canvas->cd(3);
@@ -435,13 +482,12 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   // set y axis to log scale
   gPad->SetLogy(1);
 
-  // Add legend
-  TLegend* leg_cl_wrt_mcp_size = new TLegend(0.15, 0.6, 0.35, 0.8);
-  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_forward, "Forward", "P");
-  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_backward, "Backward", "P");
-  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_forward_scaled, "Forward scaled", "P");
-  leg_cl_wrt_mcp_size->AddEntry(h_cloneRateByMCPSize_backward_scaled, "Backward scaled", "P");
-  leg_cl_wrt_mcp_size->Draw();
+  TLegend* leg_cloneRate_wrt_mcp_size = new TLegend(0.4, 0.5, 0.6, 0.7);
+  leg_cloneRate_wrt_mcp_size->AddEntry(nClonesByMCPSize_forward, "Forward", "P");
+  leg_cloneRate_wrt_mcp_size->AddEntry(nClonesByMCPSize_backward, "Backward", "P");
+  leg_cloneRate_wrt_mcp_size->AddEntry(nClonesByMCPSize_forward_scaled, "Forward scaled", "P");
+  leg_cloneRate_wrt_mcp_size->AddEntry(nClonesByMCPSize_backward_scaled, "Backward scaled", "P");
+  leg_cloneRate_wrt_mcp_size->Draw();
 
   canvas->cd(4);
   p_cloneRate->SetLineColor(kMagenta);
@@ -452,8 +498,9 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   TString cloneOutputBase = outputBase + TString("mc_clone_plots");
   canvas->SaveAs(cloneOutputBase + suffix + ".pdf");
   delete canvas;
-  delete leg_lmtRate;
-  delete leg_cl_wrt_mcp_size;
+  // delete leg_lmtRate;
+  delete leg_cloneRate_wrt_mcp_size;
+  delete leg_Nclones_wrt_mcp_size;
 
   // make another canvas for the clone distributions
   TCanvas* canvas2 = new TCanvas("c2", "Clone Distributions", 1200, 1000);
@@ -474,21 +521,21 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   cloneDistrLegend->Draw();
 
   canvas2->cd(2);
-  TPad* basepad = (TPad*) gPad;
-  basepad->cd();  // Activate subpad (essential for not overwriting each other)
+  // TPad* basepad = (TPad*) gPad;
+  // basepad->cd();  // Activate subpad (essential for not overwriting each other)
 
-  TPad* padTop = new TPad("padTop", "Main Plot", 0.0, 0.3, 1.0, 1.0);
-  TPad* padRatio = new TPad("padRatio", "Ratio Plot", 0.0, 0.0, 1.0, 0.3);
+  // TPad* padTop = new TPad("padTop", "Main Plot", 0.0, 0.3, 1.0, 1.0);
+  // TPad* padRatio = new TPad("padRatio", "Ratio Plot", 0.0, 0.0, 1.0, 0.3);
 
-  padTop->SetBottomMargin(0.0);
-  padTop->Draw();
+  // padTop->SetBottomMargin(0.0);
+  // padTop->Draw();
 
-  padRatio->SetTopMargin(0.0);
-  padRatio->SetBottomMargin(0.3);
-  padRatio->Draw();
+  // padRatio->SetTopMargin(0.0);
+  // padRatio->SetBottomMargin(0.3);
+  // padRatio->Draw();
 
-  padTop->cd();
-  hSeedingClonesHitMCDistrSummed->SetTitle("Hit distribution of various clone types (MC) with ratio wrt Reco tracks");
+  // padTop->cd();
+  hSeedingClonesHitMCDistrSummed->SetTitle("Hit distribution of MCPs with at least one clone");
   hSeedingClonesHitMCDistrSummed->SetLineColor(kRed);
   hSeedingClonesHitMCDistrSummed->Draw("HIST");
   h_splitTrackCloneMCHitDistr->SetLineColor(kYellow);
@@ -497,47 +544,48 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   h_splitTrackClone_1MissedMCHitDistr->Draw("SAME");
   h_splitTrackClone_2MissedMCHitDistr->SetLineColor(kOrange - 7);
   h_splitTrackClone_2MissedMCHitDistr->Draw("SAME");
-  hTripletClonesHitRecoDistrSummed->SetLineColor(kBlue);
-  hTripletClonesHitRecoDistrSummed->Draw("SAME");
+  hTripletClonesHitMCDistrSummed->SetLineColor(kBlue);
+  hTripletClonesHitMCDistrSummed->Draw("SAME");
   h_moduleOverlapCloneMCHitDistr->SetLineColor(kGreen);
   h_moduleOverlapCloneMCHitDistr->Draw("SAME");
   h_otherCloneMCHitDistr->SetLineColor(kMagenta);
   h_otherCloneMCHitDistr->Draw("SAME");
   // Add legend
   TLegend* cloneHitDistrLegend = new TLegend(0.7, 0.6, 0.9, 0.85);
-  cloneHitDistrLegend->AddEntry(h_splitTrackCloneMCHitDistr, "LO Split Track", "l");
-  cloneHitDistrLegend->AddEntry(h_splitTrackClone_1MissedMCHitDistr, "NLO Split track", "l");
-  cloneHitDistrLegend->AddEntry(h_splitTrackClone_2MissedMCHitDistr, "NNLO Split track", "l");
+  cloneHitDistrLegend->SetBorderSize(0);
+  cloneHitDistrLegend->AddEntry(h_splitTrackCloneMCHitDistr, "1x Split Track", "l");
+  cloneHitDistrLegend->AddEntry(h_splitTrackClone_1MissedMCHitDistr, "2x Split Track", "l");
+  cloneHitDistrLegend->AddEntry(h_splitTrackClone_2MissedMCHitDistr, "3x Split Track", "l");
   cloneHitDistrLegend->AddEntry(hSeedingClonesHitMCDistrSummed, "Seeding", "l");
-  cloneHitDistrLegend->AddEntry(hTripletClonesHitRecoDistrSummed, "Triplet", "l");
+  cloneHitDistrLegend->AddEntry(hTripletClonesHitMCDistrSummed, "Triplet", "l");
   cloneHitDistrLegend->AddEntry(h_moduleOverlapCloneMCHitDistr, "Module overlap", "l");
   cloneHitDistrLegend->AddEntry(h_otherCloneMCHitDistr, "Other", "l");
   cloneHitDistrLegend->Draw();
   // Move to ratio plots
-  padRatio->cd();
-  hTotalSeedingCloneHitDistrRatio->SetTitle(""); // remove title
-  hTotalSeedingCloneHitDistrRatio->SetLineColor(kRed);
-  hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetTitle("MC/Reco");
-  hTotalSeedingCloneHitDistrRatio->GetXaxis()->SetTitleSize(0.12);  // Title font size
-  hTotalSeedingCloneHitDistrRatio->GetXaxis()->SetTitleOffset(1.0);  // Distance from axis
-  hTotalSeedingCloneHitDistrRatio->GetXaxis()->SetLabelSize(0.10);  // label font size
-  hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetTitleSize(0.10);
-  hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetTitleOffset(0.4);
-  hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetLabelSize(0.08);
-  hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetNdivisions(305);
-  hTotalSeedingCloneHitDistrRatio->Draw("EP");
-  hSplitTrackCloneHitDistrRatio->SetLineColor(kYellow);
-  hSplitTrackCloneHitDistrRatio->Draw("SAME");
-  hSplitTrackClone_1MissedHitDistrRatio->SetLineColor(kOrange);
-  hSplitTrackClone_1MissedHitDistrRatio->Draw("SAME");
-  hSplitTrackClone_2MissedHitDistrRatio->SetLineColor(kOrange - 7);
-  hSplitTrackClone_2MissedHitDistrRatio->Draw("SAME");
-  hTotalTripletCloneHitDistrRatio->SetLineColor(kBlue);
-  hTotalTripletCloneHitDistrRatio->Draw("SAME");
-  hModuleOverlapCloneHitDistrRatio->SetLineColor(kGreen);
-  hModuleOverlapCloneHitDistrRatio->Draw("SAME");
-  hOtherCloneHitDistrRatio->SetLineColor(kMagenta);
-  hOtherCloneHitDistrRatio->Draw("SAME");
+  // padRatio->cd();
+  // hTotalSeedingCloneHitDistrRatio->SetTitle(""); // remove title
+  // hTotalSeedingCloneHitDistrRatio->SetLineColor(kRed);
+  // hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetTitle("MC/Reco");
+  // hTotalSeedingCloneHitDistrRatio->GetXaxis()->SetTitleSize(0.12);  // Title font size
+  // hTotalSeedingCloneHitDistrRatio->GetXaxis()->SetTitleOffset(1.0);  // Distance from axis
+  // hTotalSeedingCloneHitDistrRatio->GetXaxis()->SetLabelSize(0.10);  // label font size
+  // hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetTitleSize(0.10);
+  // hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetTitleOffset(0.4);
+  // hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetLabelSize(0.08);
+  // hTotalSeedingCloneHitDistrRatio->GetYaxis()->SetNdivisions(305);
+  // hTotalSeedingCloneHitDistrRatio->Draw("EP");
+  // hSplitTrackCloneHitDistrRatio->SetLineColor(kYellow);
+  // hSplitTrackCloneHitDistrRatio->Draw("SAME");
+  // hSplitTrackClone_1MissedHitDistrRatio->SetLineColor(kOrange);
+  // hSplitTrackClone_1MissedHitDistrRatio->Draw("SAME");
+  // hSplitTrackClone_2MissedHitDistrRatio->SetLineColor(kOrange - 7);
+  // hSplitTrackClone_2MissedHitDistrRatio->Draw("SAME");
+  // hTotalTripletCloneHitDistrRatio->SetLineColor(kBlue);
+  // hTotalTripletCloneHitDistrRatio->Draw("SAME");
+  // hModuleOverlapCloneHitDistrRatio->SetLineColor(kGreen);
+  // hModuleOverlapCloneHitDistrRatio->Draw("SAME");
+  // hOtherCloneHitDistrRatio->SetLineColor(kMagenta);
+  // hOtherCloneHitDistrRatio->Draw("SAME");
 
   canvas2->cd(3);
   clonesMCSum->Draw("HIST");
