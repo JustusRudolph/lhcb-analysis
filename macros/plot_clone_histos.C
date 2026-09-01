@@ -209,9 +209,9 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   TLegend* mcCloneLegend = new TLegend(0.35, 0.5, 0.55, 0.7);
   // remove edges from legend
   mcCloneLegend->SetBorderSize(0);
-  mcCloneLegend->AddEntry(h_splitTrackClonesMCByEta, "1x Split Track", "f");
-  mcCloneLegend->AddEntry(h_splitTrackClones_1MissedMCByEta, "2x Split Track", "f");
-  mcCloneLegend->AddEntry(h_splitTrackClones_2MissedMCByEta, "3x Split Track", "f");
+  mcCloneLegend->AddEntry(h_splitTrackClonesMCByEta, "LO Split Track", "f");
+  mcCloneLegend->AddEntry(h_splitTrackClones_1MissedMCByEta, "NLO Split Track", "f");
+  mcCloneLegend->AddEntry(h_splitTrackClones_2MissedMCByEta, "NNLO Split Track", "f");
   mcCloneLegend->AddEntry(h_seedingClonesMCByEtaSummed, "Seeding", "f");
   mcCloneLegend->AddEntry(h_tripletClonesMCByEtaSummed, "Triplet", "f");
   mcCloneLegend->AddEntry(h_moduleOverlapClonesMCByEta, "Module overlap", "f");
@@ -243,9 +243,9 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   // Add legend for Reco clone stack
   TLegend* recoCloneLegend = new TLegend(0.35, 0.5, 0.55, 0.7);
   recoCloneLegend->SetBorderSize(0);
-  recoCloneLegend->AddEntry(h_splitTrackClonesRecoByEta, "1x Split Track", "f");
-  recoCloneLegend->AddEntry(h_splitTrackClones_1MissedRecoByEta, "2x Split Track", "f");
-  recoCloneLegend->AddEntry(h_splitTrackClones_2MissedRecoByEta, "3x Split Track", "f");
+  recoCloneLegend->AddEntry(h_splitTrackClonesRecoByEta, "LO Split Track", "f");
+  recoCloneLegend->AddEntry(h_splitTrackClones_1MissedRecoByEta, "NLO Split Track", "f");
+  recoCloneLegend->AddEntry(h_splitTrackClones_2MissedRecoByEta, "NNLO Split Track", "f");
   recoCloneLegend->AddEntry(h_seedingClonesRecoByEtaSummed, "Seeding", "f");
   recoCloneLegend->AddEntry(h_tripletClonesRecoByEtaSummed, "Triplet", "f");
   recoCloneLegend->AddEntry(h_moduleOverlapClonesRecoByEta, "Module overlap", "f");
@@ -279,9 +279,9 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   // Add legend for clone distribution stack
   TLegend* cloneDistrLegend = new TLegend(0.6, 0.4, 0.8, 0.6);
   cloneDistrLegend->SetBorderSize(0);
-  cloneDistrLegend->AddEntry(hSplitTrackCloneDistribution, "1x Split Track", "f");
-  cloneDistrLegend->AddEntry(hSplitTrackClone_1MissedDistribution, "2x Split Track", "f");
-  cloneDistrLegend->AddEntry(hSplitTrackClone_2MissedDistribution, "3x Split Track", "f");
+  cloneDistrLegend->AddEntry(hSplitTrackCloneDistribution, "LO Split Track", "f");
+  cloneDistrLegend->AddEntry(hSplitTrackClone_1MissedDistribution, "NLO Split Track", "f");
+  cloneDistrLegend->AddEntry(hSplitTrackClone_2MissedDistribution, "NNLO Split Track", "f");
   cloneDistrLegend->AddEntry(hSeedingCloneDistributionSummed, "Seeding", "f");
   cloneDistrLegend->AddEntry(hTripletCloneDistributionSummed, "Triplet", "f");
   cloneDistrLegend->AddEntry(hOverlapCloneDistribution, "Module overlap", "f");
@@ -553,9 +553,9 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   // Add legend
   TLegend* cloneHitDistrLegend = new TLegend(0.7, 0.6, 0.9, 0.85);
   cloneHitDistrLegend->SetBorderSize(0);
-  cloneHitDistrLegend->AddEntry(h_splitTrackCloneMCHitDistr, "1x Split Track", "l");
-  cloneHitDistrLegend->AddEntry(h_splitTrackClone_1MissedMCHitDistr, "2x Split Track", "l");
-  cloneHitDistrLegend->AddEntry(h_splitTrackClone_2MissedMCHitDistr, "3x Split Track", "l");
+  cloneHitDistrLegend->AddEntry(h_splitTrackCloneMCHitDistr, "LO Split Track", "l");
+  cloneHitDistrLegend->AddEntry(h_splitTrackClone_1MissedMCHitDistr, "NLO Split Track", "l");
+  cloneHitDistrLegend->AddEntry(h_splitTrackClone_2MissedMCHitDistr, "NNLO Split Track", "l");
   cloneHitDistrLegend->AddEntry(hSeedingClonesHitMCDistrSummed, "Seeding", "l");
   cloneHitDistrLegend->AddEntry(hTripletClonesHitMCDistrSummed, "Triplet", "l");
   cloneHitDistrLegend->AddEntry(h_moduleOverlapCloneMCHitDistr, "Module overlap", "l");
