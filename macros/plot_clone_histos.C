@@ -521,6 +521,10 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   cloneDistrLegend->Draw();
 
   canvas2->cd(2);
+  // The y axis here runs to ~77000, so the labels are 5 digits wide. The
+  // default left margin of 0.1 cannot fit those labels and the rotated y axis
+  // title, which then falls outside the pad and gets clipped.
+  gPad->SetLeftMargin(0.15);
   // TPad* basepad = (TPad*) gPad;
   // basepad->cd();  // Activate subpad (essential for not overwriting each other)
 
@@ -551,8 +555,9 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   h_otherCloneMCHitDistr->SetLineColor(kMagenta);
   h_otherCloneMCHitDistr->Draw("SAME");
   // Add legend
-  TLegend* cloneHitDistrLegend = new TLegend(0.7, 0.6, 0.9, 0.85);
+  TLegend* cloneHitDistrLegend = new TLegend(0.62, 0.6, 0.82, 0.85);
   cloneHitDistrLegend->SetBorderSize(0);
+  cloneHitDistrLegend->SetFillStyle(0);  // transparent, so the frame box shows through
   cloneHitDistrLegend->AddEntry(h_splitTrackCloneMCHitDistr, "LO Split Track", "l");
   cloneHitDistrLegend->AddEntry(h_splitTrackClone_1MissedMCHitDistr, "NLO Split Track", "l");
   cloneHitDistrLegend->AddEntry(h_splitTrackClone_2MissedMCHitDistr, "NNLO Split Track", "l");
@@ -588,9 +593,13 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   // hOtherCloneHitDistrRatio->Draw("SAME");
 
   canvas2->cd(3);
+  // Same as pad 2: for low-clone-rate datasets the labels run 0.005..0.035,
+  // which is too wide for the default left margin, clipping the y axis title.
+  gPad->SetLeftMargin(0.15);
   clonesMCSum->Draw("HIST");
   mcCloneLegend->Draw();
   canvas2->cd(4);
+  gPad->SetLeftMargin(0.15);
   clonesRecoSum->Draw("HIST");
   recoCloneLegend->Draw();
 
