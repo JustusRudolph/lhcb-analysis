@@ -90,6 +90,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   // ----------------- BRANCH DATA ----------------
   unsigned mcTrackRunNo, mcTrackEvNo, nMatches, recoEvOffset, nMCVeloHits;
   int mcMatchIdxForReco;  // to access right reco track with offset
+  int mcPID;
   float recoEta, mcPT;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
@@ -105,6 +106,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   mcTrackTree->SetBranchAddress("nHitsVelo", &nMCVeloHits);
   mcTrackTree->SetBranchAddress("nMatches", &nMatches);
   mcTrackTree->SetBranchAddress("pt", &mcPT);
+  mcTrackTree->SetBranchAddress("pid", &mcPID);
   mcTrackTree->SetBranchAddress("matchedTracks", &matchedRecoTrackIndices);
   mcTrackTree->SetBranchAddress("lhcbid", &mcTrackLHCbIDs);
   mcTrackTree->SetBranchAddress("x", &x_mc);
@@ -178,6 +180,8 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   unsigned nMCTracks = mcTrackTree->GetEntries();
   printf("Going through %u MC particles now.\n", nMCTracks);
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
+    if (abs(mcPID) == 11 || nMCVeloHits < 3)  // don't consider electrons or non-seedable tracks
+      continue;
     // print progress
     if (i_mct && (i_mct % 1000000 == 0))
       printf("Finished with %d%% of MC Tracks.\n", (int) (100. * (float) i_mct / nMCTracks));
@@ -188,21 +192,24 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     // need to fill reference histograms for all MC tracks
     Hit::BaseHit h0, h1, h2;
     std::tuple<float, float, float> estimatedPosition{};
+    unsigned prev_moduleNumber;  // ensure clusters don't dominate this
     for (unsigned i_mc_hit = 0; i_mc_hit < mcTrackLHCbIDs->size(); i_mc_hit++) {
       unsigned mc_lhcbid = mcTrackLHCbIDs->at(i_mc_hit);
       unsigned moduleNumber = (mc_lhcbid >> 12) & 0x3F;
       float z = moduleToZ->GetBinContent(moduleNumber + 1);  // +1 because ROOT 1 indexed
       
-      if (i_mc_hit == 0) {
+      if (h0.id == 0) {
         // Set 0th hit
         h0 = Hit::BaseHit(mc_lhcbid, x_mc->at(i_mc_hit), y_mc->at(i_mc_hit), z, 0.);
-      } else if (i_mc_hit == 1) {
+        prev_moduleNumber = moduleNumber;
+      } else if (h1.id == 0 && moduleNumber != prev_moduleNumber) {
         // Set 1st hit
         h1 = Hit::BaseHit(mc_lhcbid, x_mc->at(i_mc_hit), y_mc->at(i_mc_hit), z, 0.);
-      } else {
+        prev_moduleNumber = moduleNumber;
+      } else if (moduleNumber != prev_moduleNumber) {
         // Set 2nd hit and estimate position
         h2 = Hit::BaseHit(mc_lhcbid, x_mc->at(i_mc_hit), y_mc->at(i_mc_hit), z, 0.);
-        float dz = z - h1.z;
+        float dz = z - h0.z;
         estimatedPosition = Hit::estimateNextPhi(h0, h1, dz);
         float dx = std::get<0>(estimatedPosition) - h2.x;
         float dy = std::get<1>(estimatedPosition) - h2.y;
@@ -212,12 +219,13 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
         h_dz_reference->Fill(dz);
         h_deltaPhi_reference->Fill(dPhi);
         h_deflection_reference->Fill(dx * dx + dy * dy);
-        h_deflection_per_z_reference->Fill((dx * dx + dy * dy) / dz);
+        h_deflection_per_z_reference->Fill((dx * dx + dy * dy) / abs(dz));
         h_deflection_per_z_sq_reference->Fill((dx * dx + dy * dy) / (dz * dz));
 
         // reset hits
         h0 = h1;
         h1 = h2;
+        prev_moduleNumber = moduleNumber;
       }
 
     }
