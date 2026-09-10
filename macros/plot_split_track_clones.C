@@ -23,15 +23,19 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   TH1D* h_deltaPhi_splitTrackClone = (TH1D*) file->Get("delta_phi");
   TH1D* h_deltaPhi_splitTrackClone_1Missed = (TH1D*) file->Get("delta_phi_1Missed");
   TH1D* h_deltaPhi_splitTrackClone_2Missed = (TH1D*) file->Get("delta_phi_2Missed");
+  TH1D* h_deltaPhi_reference = (TH1D*) file->Get("delta_phi_reference");
   TH1D* h_deflection_splitTrackClone = (TH1D*) file->Get("deflection");
   TH1D* h_deflection_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_1Missed");
   TH1D* h_deflection_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_2Missed");
+  TH1D* h_deflection_reference = (TH1D*) file->Get("deflection_reference");
   TH1D* h_deflection_per_z_splitTrackClone = (TH1D*) file->Get("deflection_per_z");
   TH1D* h_deflection_per_z_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_per_z_1Missed");
   TH1D* h_deflection_per_z_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_per_z_2Missed");
+  TH1D* h_deflection_per_z_reference = (TH1D*) file->Get("deflection_per_z_reference");
   TH1D* h_deflection_per_z_sq_splitTrackClone = (TH1D*) file->Get("deflection_per_z_sq");
   TH1D* h_deflection_per_z_sq_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_per_z_sq_1Missed");
   TH1D* h_deflection_per_z_sq_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_per_z_sq_2Missed");
+  TH1D* h_deflection_per_z_sq_reference = (TH1D*) file->Get("deflection_per_z_sq_reference");
   TH1D* h_pT_reference = (TH1D*) file->Get("pT_reference");
   TH1D* h_pT_splitTrackClone = (TH1D*) file->Get("pT");
   TH1D* h_pT_splitTrackClone_1Missed = (TH1D*) file->Get("pT_1Missed");
@@ -77,6 +81,23 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   deflectionPerZSqStack->Add(h_deflection_per_z_sq_splitTrackClone_1Missed);
   deflectionPerZSqStack->Add(h_deflection_per_z_sq_splitTrackClone_2Missed);
 
+  // Reference distributions are drawn as red points on top of the stacks, scaled to the
+  // summed height of the stack so that the shapes can be compared directly.
+  auto scaleReferenceToStack = [](TH1D* reference, THStack* stack) {
+    // last entry of the stack is the cumulative sum of all its histograms
+    TH1* stackSum = (TH1*) stack->GetStack()->Last();
+    double maxReference = reference->GetMaximum();
+    if (maxReference > 0) reference->Scale(stackSum->GetMaximum() / maxReference);
+    reference->SetLineColor(kRed);
+    reference->SetMarkerColor(kRed);
+    reference->SetMarkerStyle(20);
+    reference->SetMarkerSize(0.5);
+  };
+  scaleReferenceToStack(h_deltaPhi_reference, deltaPhiStack);
+  scaleReferenceToStack(h_deflection_reference, deflectionStack);
+  scaleReferenceToStack(h_deflection_per_z_reference, deflectionPerZStack);
+  scaleReferenceToStack(h_deflection_per_z_sq_reference, deflectionPerZSqStack);
+
   THStack* pTStack = new THStack("pTStack", "pT Distributions");
   h_pT_splitTrackClone->SetFillColor(kYellow);
   h_pT_splitTrackClone_1Missed->SetFillColor(kOrange);
@@ -105,22 +126,27 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   splitTrackLegend->AddEntry(h_deltaPhi_splitTrackClone, "LO Split Track", "f");
   splitTrackLegend->AddEntry(h_deltaPhi_splitTrackClone_1Missed, "NLO Split Track", "f");
   splitTrackLegend->AddEntry(h_deltaPhi_splitTrackClone_2Missed, "NNLO Split Track", "f");
-  
+  splitTrackLegend->AddEntry(h_deltaPhi_reference, "Reference (scaled)", "p");
+
   // Create a canvas to draw the histograms
   TCanvas* canvas_1d = new TCanvas("canvas_1d", "Split Track Clones", 800, 800);
   canvas_1d->Divide(2, 2);
   canvas_1d->cd(1);  // (0,0)
   deltaPhiStack->Draw("HIST");
+  h_deltaPhi_reference->Draw("P SAME");
   splitTrackLegend->Draw();
   canvas_1d->cd(2);  // (0,1)
   deflectionStack->Draw("HIST");
+  h_deflection_reference->Draw("P SAME");
   splitTrackLegend->Draw();
   canvas_1d->cd(3);  // (1,0)
   deflectionPerZStack->Draw("HIST");
   // deflectionPerZStack->GetXaxis()->SetMaxDigits(1);
+  h_deflection_per_z_reference->Draw("P SAME");
   splitTrackLegend->Draw();
   canvas_1d->cd(4);  // (1,1)
   deflectionPerZSqStack->Draw("HIST");
+  h_deflection_per_z_sq_reference->Draw("P SAME");
   splitTrackLegend->Draw();
 
 
