@@ -63,6 +63,14 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   for (unsigned i = 0; i <= nPTBins; i++) {
     ptBinEdges[i] = ptMin + ptStep * i;
   }
+  // dz bins (extrapolation distance in z, can be negative for backwards tracks)
+  int nDZBins = 200;
+  std::vector<float> dzBinEdges(nDZBins + 1);
+  float dzMax{500.}, dzMin{-500.};  // fine enough to resolve the ~25mm module spacing
+  float dzStep = (dzMax - dzMin) / (nDZBins);
+  for (unsigned i = 0; i <= nDZBins; i++) {
+    dzBinEdges[i] = dzMin + dzStep * i;
+  }
   // dr bins (deflection)
   int nDeflectionBins = 50;
   std::vector<float> deflectionBinEdges(nDeflectionBins + 1);
@@ -119,6 +127,14 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     "delta_phi_2Missed", "#Delta#phi Distribution;#eta;#Delta#phi", nPhiBins, phiBinEdges.data());
   TH1D* h_deltaPhi_reference = new TH1D(
     "delta_phi_reference", "#Delta#phi Distribution;#eta;#Delta#phi", nPhiBins, phiBinEdges.data());
+  TH1D* h_dz_splitTrackClone = new TH1D(
+    "dz", "#Deltaz Distribution;#Deltaz;Counts", nDZBins, dzBinEdges.data());
+  TH1D* h_dz_splitTrackClone_1Missed = new TH1D(
+    "dz_1Missed", "#Deltaz Distribution;#Deltaz;Counts", nDZBins, dzBinEdges.data());
+  TH1D* h_dz_splitTrackClone_2Missed = new TH1D(
+    "dz_2Missed", "#Deltaz Distribution;#Deltaz;Counts", nDZBins, dzBinEdges.data());
+  TH1D* h_dz_reference = new TH1D(
+    "dz_reference", "#Deltaz Distribution;#Deltaz;Counts", nDZBins, dzBinEdges.data());
   TH1D* h_deflection_splitTrackClone = new TH1D(
     "deflection", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
   TH1D* h_deflection_splitTrackClone_1Missed = new TH1D(
@@ -193,6 +209,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
         float dPhi = std::get<2>(estimatedPosition) - h2.phi();
 
         // fill histograms with the differences
+        h_dz_reference->Fill(dz);
         h_deltaPhi_reference->Fill(dPhi);
         h_deflection_reference->Fill(dx * dx + dy * dy);
         h_deflection_per_z_reference->Fill((dx * dx + dy * dy) / dz);
@@ -291,6 +308,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
       float dr_sq_per_z_sq = dr_sq / (dz_to_next_module[i_split] * dz_to_next_module[i_split]);
       // Fill histograms
       if (isSplitTrack) {
+        h_dz_splitTrackClone->Fill(dz_to_next_module[i_split]);
         h_deltaPhi_splitTrackClone->Fill(dPhi[i_split]);
         h_deflection_splitTrackClone->Fill(dr_sq);
         h_deflection_per_z_splitTrackClone->Fill(dr_sq_per_z);
@@ -298,6 +316,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
         if (i_split == 0) h_pT_splitTrackClone->Fill(mcPT);  // only fill this once
         h_phi_pT_splitTrackClone->Fill(dPhi[i_split], mcPT);
       } else if (isSplitTrack_1Missed) {
+        h_dz_splitTrackClone_1Missed->Fill(dz_to_next_module[i_split]);
         h_deltaPhi_splitTrackClone_1Missed->Fill(dPhi[i_split]);
         h_deflection_splitTrackClone_1Missed->Fill(dr_sq);
         h_deflection_per_z_splitTrackClone_1Missed->Fill(dr_sq_per_z);
@@ -305,6 +324,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
         if (i_split == 0) h_pT_splitTrackClone_1Missed->Fill(mcPT);  // only fill this once
         h_phi_pT_splitTrackClone_1Missed->Fill(dPhi[i_split], mcPT);
       } else if (isSplitTrack_2Missed) {
+        h_dz_splitTrackClone_2Missed->Fill(dz_to_next_module[i_split]);
         h_deltaPhi_splitTrackClone_2Missed->Fill(dPhi[i_split]);
         h_deflection_splitTrackClone_2Missed->Fill(dr_sq);
         h_deflection_per_z_splitTrackClone_2Missed->Fill(dr_sq_per_z);
@@ -322,6 +342,10 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   h_deltaPhi_splitTrackClone_1Missed->Write();
   h_deltaPhi_splitTrackClone_2Missed->Write();
   h_deltaPhi_reference->Write();
+  h_dz_splitTrackClone->Write();
+  h_dz_splitTrackClone_1Missed->Write();
+  h_dz_splitTrackClone_2Missed->Write();
+  h_dz_reference->Write();
   h_deflection_splitTrackClone->Write();
   h_deflection_splitTrackClone_1Missed->Write();
   h_deflection_splitTrackClone_2Missed->Write();

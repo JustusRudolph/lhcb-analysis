@@ -24,6 +24,10 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   TH1D* h_deltaPhi_splitTrackClone_1Missed = (TH1D*) file->Get("delta_phi_1Missed");
   TH1D* h_deltaPhi_splitTrackClone_2Missed = (TH1D*) file->Get("delta_phi_2Missed");
   TH1D* h_deltaPhi_reference = (TH1D*) file->Get("delta_phi_reference");
+  TH1D* h_dz_splitTrackClone = (TH1D*) file->Get("dz");
+  TH1D* h_dz_splitTrackClone_1Missed = (TH1D*) file->Get("dz_1Missed");
+  TH1D* h_dz_splitTrackClone_2Missed = (TH1D*) file->Get("dz_2Missed");
+  TH1D* h_dz_reference = (TH1D*) file->Get("dz_reference");
   TH1D* h_deflection_splitTrackClone = (TH1D*) file->Get("deflection");
   TH1D* h_deflection_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_1Missed");
   TH1D* h_deflection_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_2Missed");
@@ -53,6 +57,15 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   deltaPhiStack->Add(h_deltaPhi_splitTrackClone);
   deltaPhiStack->Add(h_deltaPhi_splitTrackClone_1Missed);
   deltaPhiStack->Add(h_deltaPhi_splitTrackClone_2Missed);
+
+  THStack* dzStack = new THStack(
+    "dzStack", "#Deltaz to extrapolation point;#Deltaz (mm);Counts");
+  h_dz_splitTrackClone->SetFillColor(kYellow);
+  h_dz_splitTrackClone_1Missed->SetFillColor(kOrange);
+  h_dz_splitTrackClone_2Missed->SetFillColor(kOrange - 7);
+  dzStack->Add(h_dz_splitTrackClone);
+  dzStack->Add(h_dz_splitTrackClone_1Missed);
+  dzStack->Add(h_dz_splitTrackClone_2Missed);
 
   THStack* deflectionStack = new THStack(
     "deflectionStack", "Deflection in xy (squared);#Deltar^{2} (mm^{2});Counts");
@@ -94,6 +107,7 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
     reference->SetMarkerSize(0.5);
   };
   scaleReferenceToStack(h_deltaPhi_reference, deltaPhiStack);
+  scaleReferenceToStack(h_dz_reference, dzStack);
   scaleReferenceToStack(h_deflection_reference, deflectionStack);
   scaleReferenceToStack(h_deflection_per_z_reference, deflectionPerZStack);
   scaleReferenceToStack(h_deflection_per_z_sq_reference, deflectionPerZSqStack);
@@ -157,6 +171,14 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   // Clean up canvas
   delete canvas_1d;
 
+  // dz gets its own PDF as it is only there to check the extrapolation distances
+  TCanvas* canvas_dz = new TCanvas("canvas_dz", "Split Track Clones dz", 800, 600);
+  dzStack->Draw("HIST");
+  h_dz_reference->Draw("P SAME");
+  splitTrackLegend->Draw();
+  canvas_dz->SaveAs(outputBase + "_dz" + suffix + ".pdf");
+  delete canvas_dz;
+
   TCanvas* canvas_2d = new TCanvas("canvas_2d", "Split Track Clones 2D", 800, 800);
   canvas_2d->Divide(2, 2);
   canvas_2d->cd(1);  // (0,0)
@@ -176,6 +198,7 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   // clean up everything
   delete canvas_2d;
   delete deltaPhiStack;
+  delete dzStack;
   delete pTStack;
   delete deflectionStack;
   delete splitTrackLegend;
