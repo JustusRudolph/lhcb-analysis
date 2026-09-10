@@ -13,6 +13,8 @@ namespace Hit {
         : id(id), x(x), y(y), z(z), t(t) {}
     // copy constructor
     BaseHit(const BaseHit& other) : id(other.id), x(other.x), y(other.y), z(other.z), t(other.t) {}
+  
+    float phi() const { return TMath::ATan2(y, x); }
   };
 
   // return estimated x, y and thus phi of the next hit

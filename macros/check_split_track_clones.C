@@ -117,24 +117,32 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     "delta_phi_1Missed", "#Delta#phi Distribution;#eta;#Delta#phi", nPhiBins, phiBinEdges.data());
   TH1D* h_deltaPhi_splitTrackClone_2Missed = new TH1D(
     "delta_phi_2Missed", "#Delta#phi Distribution;#eta;#Delta#phi", nPhiBins, phiBinEdges.data());
+  TH1D* h_deltaPhi_reference = new TH1D(
+    "delta_phi_reference", "#Delta#phi Distribution;#eta;#Delta#phi", nPhiBins, phiBinEdges.data());
   TH1D* h_deflection_splitTrackClone = new TH1D(
     "deflection", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
   TH1D* h_deflection_splitTrackClone_1Missed = new TH1D(
     "deflection_1Missed", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
   TH1D* h_deflection_splitTrackClone_2Missed = new TH1D(
     "deflection_2Missed", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
+  TH1D* h_deflection_reference = new TH1D(
+    "deflection_reference", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
   TH1D* h_deflection_per_z_splitTrackClone = new TH1D(
     "deflection_per_z", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
   TH1D* h_deflection_per_z_splitTrackClone_1Missed = new TH1D(
     "deflection_per_z_1Missed", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
   TH1D* h_deflection_per_z_splitTrackClone_2Missed = new TH1D(
     "deflection_per_z_2Missed", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
+  TH1D* h_deflection_per_z_reference = new TH1D(
+    "deflection_per_z_reference", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
   TH1D* h_deflection_per_z_sq_splitTrackClone = new TH1D(
     "deflection_per_z_sq", "Deflection per z^2 Distribution;#eta;Deflection per z^2", nDeflectionBins, deflectionBinEdgesDZSQScaled.data());
   TH1D* h_deflection_per_z_sq_splitTrackClone_1Missed = new TH1D(
     "deflection_per_z_sq_1Missed", "Deflection per z^2 Distribution;#eta;Deflection per z^2", nDeflectionBins, deflectionBinEdgesDZSQScaled.data());
   TH1D* h_deflection_per_z_sq_splitTrackClone_2Missed = new TH1D(
     "deflection_per_z_sq_2Missed", "Deflection per z^2 Distribution;#eta;Deflection per z^2", nDeflectionBins, deflectionBinEdgesDZSQScaled.data());
+  TH1D* h_deflection_per_z_sq_reference = new TH1D(
+    "deflection_per_z_sq_reference", "Deflection per z^2 Distribution;#eta;Deflection per z^2", nDeflectionBins, deflectionBinEdgesDZSQScaled.data());
   TH1D* h_pT_reference = new TH1D(
     "pT_reference", "pT Distribution;#eta;pT", nPTBins, ptBinEdges.data());
   TH1D* h_pT_splitTrackClone = new TH1D(
@@ -160,6 +168,42 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     
     mcTrackTree->GetEntry(i_mct);
     h_pT_reference->Fill(mcPT);  // fill always, not just with clones
+
+    // need to fill reference histograms for all MC tracks
+    Hit::BaseHit h0, h1, h2;
+    std::tuple<float, float, float> estimatedPosition{};
+    for (unsigned i_mc_hit = 0; i_mc_hit < mcTrackLHCbIDs->size(); i_mc_hit++) {
+      unsigned mc_lhcbid = mcTrackLHCbIDs->at(i_mc_hit);
+      unsigned moduleNumber = (mc_lhcbid >> 12) & 0x3F;
+      float z = moduleToZ->GetBinContent(moduleNumber + 1);  // +1 because ROOT 1 indexed
+      
+      if (i_mc_hit == 0) {
+        // Set 0th hit
+        h0 = Hit::BaseHit(mc_lhcbid, x_mc->at(i_mc_hit), y_mc->at(i_mc_hit), z, 0.);
+      } else if (i_mc_hit == 1) {
+        // Set 1st hit
+        h1 = Hit::BaseHit(mc_lhcbid, x_mc->at(i_mc_hit), y_mc->at(i_mc_hit), z, 0.);
+      } else {
+        // Set 2nd hit and estimate position
+        h2 = Hit::BaseHit(mc_lhcbid, x_mc->at(i_mc_hit), y_mc->at(i_mc_hit), z, 0.);
+        float dz = z - h1.z;
+        estimatedPosition = Hit::estimateNextPhi(h0, h1, dz);
+        float dx = std::get<0>(estimatedPosition) - h2.x;
+        float dy = std::get<1>(estimatedPosition) - h2.y;
+        float dPhi = std::get<2>(estimatedPosition) - h2.phi();
+
+        // fill histograms with the differences
+        h_deltaPhi_reference->Fill(dPhi);
+        h_deflection_reference->Fill(dx * dx + dy * dy);
+        h_deflection_per_z_reference->Fill((dx * dx + dy * dy) / dz);
+        h_deflection_per_z_sq_reference->Fill((dx * dx + dy * dy) / (dz * dz));
+
+        // reset hits
+        h0 = h1;
+        h1 = h2;
+      }
+
+    }
     // don't continue if without clones
     if (nMatches < 2 || !matchedRecoTrackIndices) continue;
     unsigned kTotalIDs = 0;
@@ -169,7 +213,8 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
 
     Hit::BaseHit t0_penultimateHit, t0_lastHit, t1_firstHit;
      // delta z, x, y, & phi between two tracks (first point on 2nd)
-    float dz_to_next_module, dx, dy, dPhi;
+    std::vector<float> dz_to_next_module{}, dx{}, dy{}, dPhi{};
+    unsigned nSplits{0};  // used to check where splits happen (in case of multiple)
     for (unsigned int i_rt = 0; i_rt < nMatches; i_rt++) {
       unsigned matchIdx = matchedRecoTrackIndices->at(i_rt);
       // get relevant reco track index
@@ -187,11 +232,11 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
         unsigned reco_lhcbid = recoTrackLHCbIDs->at(i_hit_reco);
         mcTrackLHCbIDsSet.erase(reco_lhcbid);
         unsigned moduleNumber = (reco_lhcbid >> 12) & 0x3F;
-        float z = moduleToZ->GetBinContent(moduleNumber + 1);  // +1 because ROOT 1 indexed 
-        if (i_rt == 0 && i_hit_reco == nRecoHits - 2) {
+        float z = moduleToZ->GetBinContent(moduleNumber + 1);  // +1 because ROOT 1 indexed
+        if (i_rt == nSplits && i_hit_reco == nRecoHits - 2) {  // 2nd to last in curr
           t0_penultimateHit = Hit::BaseHit(reco_lhcbid, x_reco->at(i_hit_reco),
                                            y_reco->at(i_hit_reco), z, 0.);
-        } else if (i_rt == 0 && i_hit_reco == nRecoHits - 1) {
+        } else if (i_rt == nSplits && i_hit_reco == nRecoHits - 1) {  // last in curr
           // both last hits required to calculate estimated phi
           t0_lastHit = Hit::BaseHit(reco_lhcbid, x_reco->at(i_hit_reco),
                                     y_reco->at(i_hit_reco), z, 0.);
@@ -200,26 +245,26 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
           // using two modules until next hit as the estimate is gotten like that too:
           // module_pair_data[shared::next_module_pair].z[h0_module % 2] - h0.z
           // remember to reset to zero before doing next difference of split track
-          dz_to_next_module = 0;
           if (dz < 0 && moduleNumber > 1) {
             // track moving forwards, trace out detector backwards (this is what we shoudl always do)
             // jump by steps of 2 since dealing with module pairs
-            dz_to_next_module = moduleToZ->GetBinContent(moduleNumber - 1) - t0_penultimateHit.z;
+            dz_to_next_module.push_back(moduleToZ->GetBinContent(moduleNumber - 1) - t0_penultimateHit.z);
           } else {
             // detector being traced forwards
-            dz_to_next_module = moduleToZ->GetBinContent(moduleNumber + 3) - t0_penultimateHit.z;
-          }
-          auto estimate = Hit::estimateNextPhi(t0_penultimateHit, t0_lastHit, dz_to_next_module);
-          dx = std::get<0>(estimate);
-          dy = std::get<1>(estimate);
-          dPhi = std::get<2>(estimate);
-        } else if (i_rt == 1 && i_hit_reco == 0) {
+            dz_to_next_module.push_back(moduleToZ->GetBinContent(moduleNumber + 3) - t0_penultimateHit.z);
+          } // CONTINUE LATER
+          auto estimate = Hit::estimateNextPhi(t0_penultimateHit, t0_lastHit, dz_to_next_module.back());
+          dx.push_back(std::get<0>(estimate));
+          dy.push_back(std::get<1>(estimate));
+          dPhi.push_back(std::get<2>(estimate));
+        } else if (i_rt == (nSplits + 1) && i_hit_reco == 0) {  // first in next
           t1_firstHit = Hit::BaseHit(reco_lhcbid, x_reco->at(i_hit_reco),
                                      y_reco->at(i_hit_reco), z, 0.);
           // subtract to get deltas once in next track
-          dx -= x_reco->at(i_hit_reco);
-          dy -= y_reco->at(i_hit_reco);
-          dPhi -= TMath::ATan2(y_reco->at(i_hit_reco), x_reco->at(i_hit_reco));
+          dx.back() -= t1_firstHit.x;
+          dy.back() -= t1_firstHit.y;
+          dPhi.back() -= t1_firstHit.phi();
+          nSplits++;
         }
       }
     }
@@ -239,32 +284,35 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     // if not split track, continue
     if ( !(isSplitTrack || isSplitTrack_1Missed || isSplitTrack_2Missed) ) continue;
     
-    float dr_sq = dx * dx + dy * dy;
-    float dr_sq_per_z = dr_sq / abs(dz_to_next_module);
-    float dr_sq_per_z_sq = dr_sq / (dz_to_next_module * dz_to_next_module);
-    // Fill histograms
-    if (isSplitTrack) {
-      h_deltaPhi_splitTrackClone->Fill(dPhi);
-      h_deflection_splitTrackClone->Fill(dr_sq);
-      h_deflection_per_z_splitTrackClone->Fill(dr_sq_per_z);
-      h_deflection_per_z_sq_splitTrackClone->Fill(dr_sq_per_z_sq);
-      h_pT_splitTrackClone->Fill(mcPT);
-      h_phi_pT_splitTrackClone->Fill(dPhi, mcPT);
-    } else if (isSplitTrack_1Missed) {
-      h_deltaPhi_splitTrackClone_1Missed->Fill(dPhi);
-      h_deflection_splitTrackClone_1Missed->Fill(dr_sq);
-      h_deflection_per_z_splitTrackClone_1Missed->Fill(dr_sq_per_z);
-      h_deflection_per_z_sq_splitTrackClone_1Missed->Fill(dr_sq_per_z_sq);
-      h_pT_splitTrackClone_1Missed->Fill(mcPT);
-      h_phi_pT_splitTrackClone_1Missed->Fill(dPhi, mcPT);
-    } else if (isSplitTrack_2Missed) {
-      h_deltaPhi_splitTrackClone_2Missed->Fill(dPhi);
-      h_deflection_splitTrackClone_2Missed->Fill(dr_sq);
-      h_deflection_per_z_splitTrackClone_2Missed->Fill(dr_sq_per_z);
-      h_deflection_per_z_sq_splitTrackClone_2Missed->Fill(dr_sq_per_z_sq);
-      h_pT_splitTrackClone_2Missed->Fill(mcPT);
-      h_phi_pT_splitTrackClone_2Missed->Fill(dPhi, mcPT);
-    }
+    // loop over nSplits because the vectors will have one more entry than that
+    for (unsigned i_split = 0; i_split < nSplits; i_split++) {
+      float dr_sq = dx[i_split] * dx[i_split] + dy[i_split] * dy[i_split];
+      float dr_sq_per_z = dr_sq / abs(dz_to_next_module[i_split]);
+      float dr_sq_per_z_sq = dr_sq / (dz_to_next_module[i_split] * dz_to_next_module[i_split]);
+      // Fill histograms
+      if (isSplitTrack) {
+        h_deltaPhi_splitTrackClone->Fill(dPhi[i_split]);
+        h_deflection_splitTrackClone->Fill(dr_sq);
+        h_deflection_per_z_splitTrackClone->Fill(dr_sq_per_z);
+        h_deflection_per_z_sq_splitTrackClone->Fill(dr_sq_per_z_sq);
+        if (i_split == 0) h_pT_splitTrackClone->Fill(mcPT);  // only fill this once
+        h_phi_pT_splitTrackClone->Fill(dPhi[i_split], mcPT);
+      } else if (isSplitTrack_1Missed) {
+        h_deltaPhi_splitTrackClone_1Missed->Fill(dPhi[i_split]);
+        h_deflection_splitTrackClone_1Missed->Fill(dr_sq);
+        h_deflection_per_z_splitTrackClone_1Missed->Fill(dr_sq_per_z);
+        h_deflection_per_z_sq_splitTrackClone_1Missed->Fill(dr_sq_per_z_sq);
+        if (i_split == 0) h_pT_splitTrackClone_1Missed->Fill(mcPT);  // only fill this once
+        h_phi_pT_splitTrackClone_1Missed->Fill(dPhi[i_split], mcPT);
+      } else if (isSplitTrack_2Missed) {
+        h_deltaPhi_splitTrackClone_2Missed->Fill(dPhi[i_split]);
+        h_deflection_splitTrackClone_2Missed->Fill(dr_sq);
+        h_deflection_per_z_splitTrackClone_2Missed->Fill(dr_sq_per_z);
+        h_deflection_per_z_sq_splitTrackClone_2Missed->Fill(dr_sq_per_z_sq);
+        if (i_split == 0) h_pT_splitTrackClone_2Missed->Fill(mcPT);  // only fill this once
+        h_phi_pT_splitTrackClone_2Missed->Fill(dPhi[i_split], mcPT);
+      }
+    }  // nSplits loop
   }  // MC Particles loop
   // Write histograms and clean up
   TString outPrefix =
@@ -273,15 +321,19 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   h_deltaPhi_splitTrackClone->Write();
   h_deltaPhi_splitTrackClone_1Missed->Write();
   h_deltaPhi_splitTrackClone_2Missed->Write();
+  h_deltaPhi_reference->Write();
   h_deflection_splitTrackClone->Write();
   h_deflection_splitTrackClone_1Missed->Write();
   h_deflection_splitTrackClone_2Missed->Write();
+  h_deflection_reference->Write();
   h_deflection_per_z_splitTrackClone->Write();
   h_deflection_per_z_splitTrackClone_1Missed->Write();
   h_deflection_per_z_splitTrackClone_2Missed->Write();
+  h_deflection_per_z_reference->Write();
   h_deflection_per_z_sq_splitTrackClone->Write();
   h_deflection_per_z_sq_splitTrackClone_1Missed->Write();
   h_deflection_per_z_sq_splitTrackClone_2Missed->Write();
+  h_deflection_per_z_sq_reference->Write();
   h_pT_reference->Write();
   h_pT_splitTrackClone->Write();
   h_pT_splitTrackClone_1Missed->Write();
