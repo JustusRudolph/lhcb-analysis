@@ -41,6 +41,14 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
     //   std::cout << ", ";
   }
   // std::cout << "\n";
+  // pt bins, same range as the efficiency plots use
+  int nPTBins = 50;
+  std::vector<float> ptBinEdges(nPTBins+1);
+  float ptMax{5000.}, ptMin{0.};
+  float ptStep = (ptMax - ptMin) / (nPTBins);
+  for (unsigned i = 0; i <= nPTBins; i++) {
+    ptBinEdges[i] = ptMin + ptStep * i;
+  }
   int nHitMax = 15, nHitMin = 3;
   int nHitBins = nHitMax - nHitMin + 1;
   float epsilon = 1e-6;
@@ -75,7 +83,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   bool isClone, hasVelo;
   unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits;
   int mcMatchIdxForReco, mcPID, runNoReco, evNoReco;
-  float mcEta, recoEta;
+  float mcEta, recoEta, mcPT;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
   std::vector<unsigned>* mcTrackLHCbIDs = nullptr;
@@ -86,6 +94,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   mcTrackTree->SetBranchAddress("evNo", &mcTrackEvNo);
   mcTrackTree->SetBranchAddress("runNo", &mcTrackRunNo);
   mcTrackTree->SetBranchAddress("eta", &mcEta);
+  mcTrackTree->SetBranchAddress("pt", &mcPT);
   mcTrackTree->SetBranchAddress("hasVelo", &hasVelo);
   mcTrackTree->SetBranchAddress("pid", &mcPID);
   mcTrackTree->SetBranchAddress("nHitsVelo", &nMCVeloHits);
@@ -193,6 +202,9 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   TProfile* cloneRate = new TProfile(
     "clone_rate", "Clone Rate;#eta;Clone Rate",
     nEtaBins, etaBinEdges.data());
+  TProfile* cloneRatePT = new TProfile(
+    "clone_rate_pt", "Clone Rate;p_{T} (MeV);Clone Rate",
+    nPTBins, ptBinEdges.data());
   // clone types by MC and reco
   // by MC describes the rate of an MC track having at least one clone,
   // and by reco describes the rate of it being a clone.
@@ -728,6 +740,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
       otherClonesRecoByEta->Fill(mcEta, (nMatches - 1) * isOtherClone);
       // have an if (!nMatches) guard already earlier
       cloneRate->Fill(mcEta, nMatches - 1);
+      cloneRatePT->Fill(mcPT, nMatches - 1);
     }  // if nMatches && inEtaAcceptance(mcEta)
 
     float idDuplRate = 1. - (float) uniqueIDs.size() / (float) kTotalIDs;
@@ -826,6 +839,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   hNMatches->Write();
   ghostRates->Write();
   cloneRate->Write();
+  cloneRatePT->Write();
   splitTrackClonesMCByEta->Write();
   splitTrackClones_1MissedMCByEta->Write();
   splitTrackClones_2MissedMCByEta->Write();

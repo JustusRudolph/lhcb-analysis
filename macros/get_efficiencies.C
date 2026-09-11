@@ -91,14 +91,20 @@ void get_efficiencies(unsigned nEvents=5000, unsigned max_scatter=80000,
     std::cerr << "Error: Could not open ROOT file." << std::endl;
     return;
   }
-  // get ghost rates, these are calculated separately and are optional
-  TProfile* ghostRates = nullptr;
-  TFile* clone_histo_file = TFile::Open(
-    TString(Utils::Definitions::analysisRoot + "/hists/clones/mc_hists") + input_suffix);
-  if (!clone_histo_file || clone_histo_file->IsZombie()) {
-    std::cerr << "Warning: no clone hists for" << suffix << ", skipping ghost rates.\n";
+  // ghost and clone rates are calculated separately by get_clone_rates.C, which writes them
+  // into the mc_hists file. They are optional here.
+  std::vector<std::string> rateNames = {"ghost_rates", "clone_rate", "clone_rate_pt"};
+  std::vector<TProfile*> rates(rateNames.size(), nullptr);
+  TString mcHistPath =
+    TString(Utils::Definitions::analysisRoot + "/hists/clones/mc_hists") + input_suffix;
+  TFile* mc_histo_file = TFile::Open(mcHistPath);
+  if (!mc_histo_file || mc_histo_file->IsZombie()) {
+    std::cerr << "Warning: " << mcHistPath << " not found, skipping ghost and clone rates.\n";
   } else {
-    ghostRates = (TProfile*) clone_histo_file->Get("ghost_rates");
+    for (unsigned i = 0; i < rateNames.size(); i++) {
+      rates[i] = (TProfile*) mc_histo_file->Get(rateNames[i].c_str());
+      if (!rates[i]) std::cerr << "Warning: no " << rateNames[i] << " in " << mcHistPath << ".\n";
+    }
   }
 
   if (outName.IsNull()) outName = TString("efficiencies") + suffix;
@@ -117,18 +123,17 @@ void get_efficiencies(unsigned nEvents=5000, unsigned max_scatter=80000,
       delete eff;
     }
   }
-  if (ghostRates) {
-    // same profile for both regions, they only differ in the drawn x range
-    ghostRates->SetTitle("Ghost Rates;#eta;Ghost Rate");
-    ghostRates->Write("ghost_rates");
+  // the eta rates cover both regions, they only differ in the drawn x range
+  for (unsigned i = 0; i < rateNames.size(); i++) {
+    if (rates[i]) rates[i]->Write(rateNames[i].c_str());
   }
   std::cout << "Wrote efficiencies to " << outPath << std::endl;
 
   outFile->Close();
   delete outFile;
-  if (clone_histo_file) {
-    clone_histo_file->Close();
-    delete clone_histo_file;
+  if (mc_histo_file) {
+    mc_histo_file->Close();
+    delete mc_histo_file;
   }
   file->Close();
   delete file;

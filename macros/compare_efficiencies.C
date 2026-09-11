@@ -72,29 +72,37 @@ void draw_efficiency_comparison(const std::vector<TFile*>& files,
 }
 
 /*
- * Ghost rates are a TProfile rather than an efficiency, so they need their own overlay.
+ * Ghost and clone rates are TProfiles rather than efficiencies, so they need their own overlay.
+ * The eta profiles hold both regions, so their x range is what picks the region out.
  */
-void draw_ghost_rate_comparison(const std::vector<TFile*>& files,
-                                const std::vector<TString>& labels, bool isForward) {
+void draw_rate_comparison(const std::vector<TFile*>& files, const std::vector<TString>& labels,
+                          const std::string& histName, const std::string& title,
+                          bool isVsEta, bool isForward, double yMax) {
   TLegend* legend = new TLegend(0.6, 0.65, 0.88, 0.85);
   legend->SetBorderSize(0);
   bool anyDrawn = false;
   for (unsigned i = 0; i < files.size(); i++) {
-    TProfile* ghostRates = (TProfile*) files[i]->Get("ghost_rates");
-    if (!ghostRates) {
-      std::cerr << "Warning: ghost_rates not found in " << files[i]->GetName() << "\n";
+    TProfile* rate = (TProfile*) files[i]->Get(histName.c_str());
+    if (!rate) {
+      std::cerr << "Warning: " << histName << " not found in " << files[i]->GetName() << "\n";
       continue;
     }
-    ghostRates->SetName(Form("ghost_rates_%u", i));
+    rate->SetName(Form("%s_%u", histName.c_str(), i));
     int color = kCompareColors[i % kCompareColors.size()];
-    ghostRates->SetLineColor(color);
-    ghostRates->SetMarkerColor(color);
-    ghostRates->SetTitle("Ghost Rates;#eta;Ghost Rate");
-    ghostRates->GetYaxis()->SetRangeUser(0., 0.1);
-    if (isForward) ghostRates->GetXaxis()->SetRangeUser(1., 5.5);
-    else ghostRates->GetXaxis()->SetRangeUser(-5.5, -1.);
-    ghostRates->Draw(anyDrawn ? "SAME" : "");
-    legend->AddEntry(ghostRates, labels[i], "lp");
+    rate->SetLineColor(color);
+    rate->SetMarkerColor(color);
+    rate->SetMarkerStyle(kCompareMarkers[i % kCompareMarkers.size()]);
+    rate->SetMarkerSize(0.7);
+    rate->SetTitle(title.c_str());
+    rate->GetYaxis()->SetRangeUser(0., yMax);
+    if (isVsEta) {
+      if (isForward) rate->GetXaxis()->SetRangeUser(1., 5.5);
+      else rate->GetXaxis()->SetRangeUser(-5.5, -1.);
+    } else {
+      rate->GetXaxis()->SetRangeUser(0., 5000.);
+    }
+    rate->Draw(anyDrawn ? "SAME" : "");
+    legend->AddEntry(rate, labels[i], "lp");
     anyDrawn = true;
   }
   if (anyDrawn) legend->Draw();
@@ -142,14 +150,22 @@ void compare_efficiencies(std::vector<TString> histNames, std::vector<TString> l
 
   for (bool isForward : {true, false}) {
     TString region = (isForward ? "forward" : "backward");
-    TCanvas* canvas = new TCanvas("canvas_" + region, region + " Region Efficiencies", 1000, 800);
-    canvas->Divide(2, 2);
+    TCanvas* canvas = new TCanvas("canvas_" + region, region + " Region Efficiencies", 1500, 800);
+    canvas->Divide(3, 2);
+    // top row: efficiencies, bottom row: ghost and clone rates
     for (unsigned typeIndex = 0; typeIndex < kEfficiencyTypes.size(); typeIndex++) {
       canvas->cd(typeIndex + 1);
       draw_efficiency_comparison(files, usedLabels, kEfficiencyTypes[typeIndex], isForward);
     }
     canvas->cd(4);
-    draw_ghost_rate_comparison(files, usedLabels, isForward);
+    draw_rate_comparison(files, usedLabels, "ghost_rates", "Ghost Rates;#eta;Ghost Rate",
+                         true, isForward, 0.1);
+    canvas->cd(5);
+    draw_rate_comparison(files, usedLabels, "clone_rate", "Clone Rates;#eta;Clone Rate",
+                         true, isForward, 0.1);
+    canvas->cd(6);
+    draw_rate_comparison(files, usedLabels, "clone_rate_pt",
+                         "Clone Rates;p_{T} (MeV);Clone Rate", false, isForward, 0.1);
     canvas->SaveAs(outputBase + "_" + region + ".pdf");
     delete canvas;
   }
