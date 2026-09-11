@@ -32,10 +32,10 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   TH1D* h_deflection_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_1Missed");
   TH1D* h_deflection_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_2Missed");
   TH1D* h_deflection_reference = (TH1D*) file->Get("deflection_reference");
-  TH1D* h_deflection_per_z_splitTrackClone = (TH1D*) file->Get("deflection_per_z");
-  TH1D* h_deflection_per_z_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_per_z_1Missed");
-  TH1D* h_deflection_per_z_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_per_z_2Missed");
-  TH1D* h_deflection_per_z_reference = (TH1D*) file->Get("deflection_per_z_reference");
+  TH1D* h_angle_splitTrackClone = (TH1D*) file->Get("angle");
+  TH1D* h_angle_splitTrackClone_1Missed = (TH1D*) file->Get("angle_1Missed");
+  TH1D* h_angle_splitTrackClone_2Missed = (TH1D*) file->Get("angle_2Missed");
+  TH1D* h_angle_reference = (TH1D*) file->Get("angle_reference");
   TH1D* h_deflection_per_z_sq_splitTrackClone = (TH1D*) file->Get("deflection_per_z_sq");
   TH1D* h_deflection_per_z_sq_splitTrackClone_1Missed = (TH1D*) file->Get("deflection_per_z_sq_1Missed");
   TH1D* h_deflection_per_z_sq_splitTrackClone_2Missed = (TH1D*) file->Get("deflection_per_z_sq_2Missed");
@@ -76,14 +76,14 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   deflectionStack->Add(h_deflection_splitTrackClone_1Missed);
   deflectionStack->Add(h_deflection_splitTrackClone_2Missed);
 
-  THStack* deflectionPerZStack = new THStack(
-    "deflectionPerZStack", "Deflection by unit z;#Deltar^{2} / z (mm);Counts");
-  h_deflection_per_z_splitTrackClone->SetFillColor(kYellow);
-  h_deflection_per_z_splitTrackClone_1Missed->SetFillColor(kOrange);
-  h_deflection_per_z_splitTrackClone_2Missed->SetFillColor(kOrange - 7);
-  deflectionPerZStack->Add(h_deflection_per_z_splitTrackClone);
-  deflectionPerZStack->Add(h_deflection_per_z_splitTrackClone_1Missed);
-  deflectionPerZStack->Add(h_deflection_per_z_splitTrackClone_2Missed);
+  THStack* angleStack = new THStack(
+    "angleStack", "Deflection Angle;#theta (rad);Counts");
+  h_angle_splitTrackClone->SetFillColor(kYellow);
+  h_angle_splitTrackClone_1Missed->SetFillColor(kOrange);
+  h_angle_splitTrackClone_2Missed->SetFillColor(kOrange - 7);
+  angleStack->Add(h_angle_splitTrackClone);
+  angleStack->Add(h_angle_splitTrackClone_1Missed);
+  angleStack->Add(h_angle_splitTrackClone_2Missed);
 
   THStack* deflectionPerZSqStack = new THStack(
     "deflectionPerZSqStack", "Deflection by unit z^{2};#Deltar^{2} / z^{2} (unitless);Counts");
@@ -109,7 +109,7 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   scaleReferenceToStack(h_deltaPhi_reference, deltaPhiStack);
   scaleReferenceToStack(h_dz_reference, dzStack);
   scaleReferenceToStack(h_deflection_reference, deflectionStack);
-  scaleReferenceToStack(h_deflection_per_z_reference, deflectionPerZStack);
+  scaleReferenceToStack(h_angle_reference, angleStack);
   scaleReferenceToStack(h_deflection_per_z_sq_reference, deflectionPerZSqStack);
 
   THStack* pTStack = new THStack("pTStack", "pT Distributions");
@@ -154,9 +154,8 @@ void plot_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80000, 
   h_deflection_reference->Draw("P SAME");
   splitTrackLegend->Draw();
   canvas_1d->cd(3);  // (1,0)
-  deflectionPerZStack->Draw("HIST");
-  // deflectionPerZStack->GetXaxis()->SetMaxDigits(1);
-  h_deflection_per_z_reference->Draw("P SAME");
+  angleStack->Draw("HIST");
+  h_angle_reference->Draw("P SAME");
   splitTrackLegend->Draw();
   canvas_1d->cd(4);  // (1,1)
   deflectionPerZSqStack->Draw("HIST");

@@ -79,13 +79,19 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   for (unsigned i = 0; i <= nDeflectionBins; i++) {
     deflectionBinEdges[i] = deflectionMin + deflectionStep * i;
   }
-  // deflection bins scaled by dz
-  std::vector<float> deflectionBinEdgesDZScaled(nDeflectionBins + 1);
+  // deflection bins scaled by dz^2
   std::vector<float> deflectionBinEdgesDZSQScaled(nDeflectionBins + 1);
   for (unsigned i = 0; i <= nDeflectionBins; i++) {
     // roughly 40mm per module pair but scaled more for larger displaced ones
-    deflectionBinEdgesDZScaled[i] = deflectionBinEdges[i] / 100.;
     deflectionBinEdgesDZSQScaled[i] = deflectionBinEdges[i] / (100. * 100.);
+  }
+  // angle bins, this is the deflection per z^2 expressed as the angle it corresponds to
+  int nAngleBins = 100;
+  std::vector<float> angleBinEdges(nAngleBins + 1);
+  float angleMax{0.2}, angleMin{0.};  // in rad, 0.2 is already a very large deflection
+  float angleStep = (angleMax - angleMin) / (nAngleBins);
+  for (unsigned i = 0; i <= nAngleBins; i++) {
+    angleBinEdges[i] = angleMin + angleStep * i;
   }
   // ----------------- BRANCH DATA ----------------
   unsigned mcTrackRunNo, mcTrackEvNo, nMatches, recoEvOffset, nMCVeloHits;
@@ -145,14 +151,14 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     "deflection_2Missed", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
   TH1D* h_deflection_reference = new TH1D(
     "deflection_reference", "Deflection Distribution;#eta;Deflection", nDeflectionBins, deflectionBinEdges.data());
-  TH1D* h_deflection_per_z_splitTrackClone = new TH1D(
-    "deflection_per_z", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
-  TH1D* h_deflection_per_z_splitTrackClone_1Missed = new TH1D(
-    "deflection_per_z_1Missed", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
-  TH1D* h_deflection_per_z_splitTrackClone_2Missed = new TH1D(
-    "deflection_per_z_2Missed", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
-  TH1D* h_deflection_per_z_reference = new TH1D(
-    "deflection_per_z_reference", "Deflection per z Distribution;#eta;Deflection per z", nDeflectionBins, deflectionBinEdgesDZScaled.data());
+  TH1D* h_angle_splitTrackClone = new TH1D(
+    "angle", "Deflection Angle Distribution;#theta (rad);Counts", nAngleBins, angleBinEdges.data());
+  TH1D* h_angle_splitTrackClone_1Missed = new TH1D(
+    "angle_1Missed", "Deflection Angle Distribution;#theta (rad);Counts", nAngleBins, angleBinEdges.data());
+  TH1D* h_angle_splitTrackClone_2Missed = new TH1D(
+    "angle_2Missed", "Deflection Angle Distribution;#theta (rad);Counts", nAngleBins, angleBinEdges.data());
+  TH1D* h_angle_reference = new TH1D(
+    "angle_reference", "Deflection Angle Distribution;#theta (rad);Counts", nAngleBins, angleBinEdges.data());
   TH1D* h_deflection_per_z_sq_splitTrackClone = new TH1D(
     "deflection_per_z_sq", "Deflection per z^2 Distribution;#eta;Deflection per z^2", nDeflectionBins, deflectionBinEdgesDZSQScaled.data());
   TH1D* h_deflection_per_z_sq_splitTrackClone_1Missed = new TH1D(
@@ -223,8 +229,9 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
         h_dz_reference->Fill(dz);
         h_deltaPhi_reference->Fill(dPhi);
         h_deflection_reference->Fill(dx * dx + dy * dy);
-        h_deflection_per_z_reference->Fill((dx * dx + dy * dy) / abs(dz));
         h_deflection_per_z_sq_reference->Fill((dx * dx + dy * dy) / (dz * dz));
+        // the deflection per z^2 is tan^2 of the angle between estimate and hit
+        h_angle_reference->Fill(TMath::ATan(std::sqrt(dx * dx + dy * dy) / std::abs(dz)));
 
         // reset hits
         h0 = h1;
@@ -316,31 +323,31 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
     // loop over nSplits because the vectors will have one more entry than that
     for (unsigned i_split = 0; i_split < nSplits; i_split++) {
       float dr_sq = dx[i_split] * dx[i_split] + dy[i_split] * dy[i_split];
-      float dr_sq_per_z = dr_sq / abs(dz_to_next_module[i_split]);
+      float angle = TMath::ATan(std::sqrt(dr_sq) / std::abs(dz_to_next_module[i_split]));
       float dr_sq_per_z_sq = dr_sq / (dz_to_next_module[i_split] * dz_to_next_module[i_split]);
       // Fill histograms
       if (isSplitTrack) {
         h_dz_splitTrackClone->Fill(dz_to_next_module[i_split]);
         h_deltaPhi_splitTrackClone->Fill(dPhi[i_split]);
         h_deflection_splitTrackClone->Fill(dr_sq);
-        h_deflection_per_z_splitTrackClone->Fill(dr_sq_per_z);
         h_deflection_per_z_sq_splitTrackClone->Fill(dr_sq_per_z_sq);
+        h_angle_splitTrackClone->Fill(angle);
         if (i_split == 0) h_pT_splitTrackClone->Fill(mcPT);  // only fill this once
         h_phi_pT_splitTrackClone->Fill(dPhi[i_split], mcPT);
       } else if (isSplitTrack_1Missed) {
         h_dz_splitTrackClone_1Missed->Fill(dz_to_next_module[i_split]);
         h_deltaPhi_splitTrackClone_1Missed->Fill(dPhi[i_split]);
         h_deflection_splitTrackClone_1Missed->Fill(dr_sq);
-        h_deflection_per_z_splitTrackClone_1Missed->Fill(dr_sq_per_z);
         h_deflection_per_z_sq_splitTrackClone_1Missed->Fill(dr_sq_per_z_sq);
+        h_angle_splitTrackClone_1Missed->Fill(angle);
         if (i_split == 0) h_pT_splitTrackClone_1Missed->Fill(mcPT);  // only fill this once
         h_phi_pT_splitTrackClone_1Missed->Fill(dPhi[i_split], mcPT);
       } else if (isSplitTrack_2Missed) {
         h_dz_splitTrackClone_2Missed->Fill(dz_to_next_module[i_split]);
         h_deltaPhi_splitTrackClone_2Missed->Fill(dPhi[i_split]);
         h_deflection_splitTrackClone_2Missed->Fill(dr_sq);
-        h_deflection_per_z_splitTrackClone_2Missed->Fill(dr_sq_per_z);
         h_deflection_per_z_sq_splitTrackClone_2Missed->Fill(dr_sq_per_z_sq);
+        h_angle_splitTrackClone_2Missed->Fill(angle);
         if (i_split == 0) h_pT_splitTrackClone_2Missed->Fill(mcPT);  // only fill this once
         h_phi_pT_splitTrackClone_2Missed->Fill(dPhi[i_split], mcPT);
       }
@@ -366,10 +373,10 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   h_deflection_splitTrackClone_1Missed->Write();
   h_deflection_splitTrackClone_2Missed->Write();
   h_deflection_reference->Write();
-  h_deflection_per_z_splitTrackClone->Write();
-  h_deflection_per_z_splitTrackClone_1Missed->Write();
-  h_deflection_per_z_splitTrackClone_2Missed->Write();
-  h_deflection_per_z_reference->Write();
+  h_angle_splitTrackClone->Write();
+  h_angle_splitTrackClone_1Missed->Write();
+  h_angle_splitTrackClone_2Missed->Write();
+  h_angle_reference->Write();
   h_deflection_per_z_sq_splitTrackClone->Write();
   h_deflection_per_z_sq_splitTrackClone_1Missed->Write();
   h_deflection_per_z_sq_splitTrackClone_2Missed->Write();
