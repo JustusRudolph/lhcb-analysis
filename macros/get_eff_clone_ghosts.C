@@ -1,7 +1,10 @@
+#include <TEfficiency.h>
 #include <TFile.h>
 #include <TH1F.h>
 #include <TCanvas.h>
 #include <TString.h>
+#include <TSystem.h>
+#include <bitset>
 #include <iostream>
 #include <vector>
 #include <unordered_set>
@@ -10,9 +13,21 @@
 #include "utils/definitions.h"
 #include "utils/basic_functions.h"
 
+/*
+ * Number of different modules the MC track left a hit in. The LHCb reconstructibility is
+ * defined on separate sensors rather than on the raw hit count, so two hits in one module
+ * must not count twice.
+ */
+unsigned count_distinct_modules(const std::vector<unsigned>* lhcbIDs) {
+  if (!lhcbIDs) return 0;
+  std::bitset<Utils::Definitions::kModules> modules;
+  for (unsigned lhcbID : *lhcbIDs) modules.set((lhcbID >> 12) & 0x3F);
+  return modules.count();
+}
+
 // max_dt is in picoseconds and scatter in micrometers
-void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
-                     TString mc_file_suffix="", unsigned kEventsPerRun=200) {
+void get_eff_clone_ghosts(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
+                          TString mc_file_suffix="", unsigned kEventsPerRun=200) {
   TString input_suffix;
   if (mc_file_suffix.IsNull()) {
     TString suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
@@ -49,6 +64,14 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   for (unsigned i = 0; i <= nPTBins; i++) {
     ptBinEdges[i] = ptMin + ptStep * i;
   }
+  // docaz bins for the efficiency
+  int nDocaZBins = 50;
+  std::vector<float> docaZBinEdges(nDocaZBins+1);
+  float docaZMax{10.}, docaZMin{0.};
+  float docaZStep = (docaZMax - docaZMin) / (nDocaZBins);
+  for (unsigned i = 0; i <= nDocaZBins; i++) {
+    docaZBinEdges[i] = docaZMin + docaZStep * i;
+  }
   int nHitMax = 15, nHitMin = 3;
   int nHitBins = nHitMax - nHitMin + 1;
   float epsilon = 1e-6;
@@ -83,7 +106,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   bool isClone, hasVelo;
   unsigned nMatches, mcTrackEvNo, mcTrackRunNo, recoEvOffset, nMCVeloHits;
   int mcMatchIdxForReco, mcPID, runNoReco, evNoReco;
-  float mcEta, recoEta, mcPT;
+  float mcEta, recoEta, mcPT, mcDocaZ;
   std::vector<unsigned>* matchedRecoTrackIndices = nullptr;
   std::vector<unsigned>* recoTrackLHCbIDs = nullptr;
   std::vector<unsigned>* mcTrackLHCbIDs = nullptr;
@@ -95,6 +118,7 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   mcTrackTree->SetBranchAddress("runNo", &mcTrackRunNo);
   mcTrackTree->SetBranchAddress("eta", &mcEta);
   mcTrackTree->SetBranchAddress("pt", &mcPT);
+  mcTrackTree->SetBranchAddress("docaz", &mcDocaZ);
   mcTrackTree->SetBranchAddress("hasVelo", &hasVelo);
   mcTrackTree->SetBranchAddress("pid", &mcPID);
   mcTrackTree->SetBranchAddress("nHitsVelo", &nMCVeloHits);
@@ -205,6 +229,25 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   TProfile* cloneRatePT = new TProfile(
     "clone_rate_pt", "Clone Rate;p_{T} (MeV);Clone Rate",
     nPTBins, ptBinEdges.data());
+  // Efficiency inputs: every reconstructible MC track goes into the denominator, the ones
+  // with at least one match into the numerator. Per region and variable, in that order.
+  const std::vector<std::string> kEffTypes = {"Pt", "Eta", "docaz"};
+  const std::vector<std::string> kEffAxes = {"p_{T} (MeV)", "#eta", "DOCA_{z} (mm)"};
+  std::vector<TH1D*> effReconstructible{}, effReconstructed{};
+  for (unsigned region = 0; region < 2; region++) {
+    std::string regionName = (region == 0 ? "forward" : "backward");
+    for (unsigned t = 0; t < kEffTypes.size(); t++) {
+      std::string base = "efficiency_" + regionName + "_" + kEffTypes[t];
+      std::string title = "Efficiency vs " + kEffAxes[t] + ";" + kEffAxes[t] + ";Efficiency";
+      int nBins = (t == 0 ? nPTBins : (t == 1 ? nEtaBins : nDocaZBins));
+      const float* edges = (t == 0 ? ptBinEdges.data()
+                                   : (t == 1 ? etaBinEdges.data() : docaZBinEdges.data()));
+      effReconstructible.push_back(
+        new TH1D((base + "_reconstructible").c_str(), title.c_str(), nBins, edges));
+      effReconstructed.push_back(
+        new TH1D((base + "_reconstructed").c_str(), title.c_str(), nBins, edges));
+    }
+  }
   // clone types by MC and reco
   // by MC describes the rate of an MC track having at least one clone,
   // and by reco describes the rate of it being a clone.
@@ -383,8 +426,18 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
     int mcPID_abs = mcPID < 0 ? -mcPID : mcPID;
     bool isInAcceptance = (mcEta >= -5 && mcEta <= -2) ||
                           (mcEta >= 2 && mcEta <= 5);
-    bool isReconstructible = isInAcceptance && hasVelo && (mcPID_abs != 11);  // no e+ or e-
+    // hits in at least 3 different modules and not an electron, as in LHCb's MCTrackInfo
+    unsigned nDistinctModules = count_distinct_modules(mcTrackLHCbIDs);
+    bool isReconstructible = isInAcceptance && (nDistinctModules >= 3) && (mcPID_abs != 11);
     if (!isReconstructible) continue;  // skip if not reconstructible
+    // reconstructed means the MC track was matched to at least one reco track
+    unsigned effRegion = (mcEta < 0 ? 1 : 0);
+    std::vector<float> effValues = {mcPT, mcEta, mcDocaZ};
+    for (unsigned t = 0; t < kEffTypes.size(); t++) {
+      unsigned effIdx = effRegion * kEffTypes.size() + t;
+      effReconstructible[effIdx]->Fill(effValues[t]);
+      if (nMatches) effReconstructed[effIdx]->Fill(effValues[t]);
+    }
     // Fill eff and clone numbers
     if (mcEta < 0) {
       nTotalBackward++;
@@ -815,8 +868,9 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
                         ((nTotalClonesForward + nTotalRecodForward) +
                          (nTotalClonesBackward + nTotalRecodBackward)));
   // write histograms
-  TFile* outFile = new TFile(TString((Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str()) +
-                              input_suffix, "RECREATE");
+  TString outDir = (Utils::Definitions::analysisRoot + "/hists/eff_clone_ghosts").c_str();
+  gSystem->mkdir(outDir, true);  // TFile does not create the directory itself
+  TFile* outFile = new TFile(outDir + "/mc_hists" + input_suffix, "RECREATE");
   hMCHitDistribution->Write();
   hDuplicateIDRates->Write();
   hUniqueIDRates->Write();
@@ -840,6 +894,18 @@ void get_clone_rates(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned
   ghostRates->Write();
   cloneRate->Write();
   cloneRatePT->Write();
+  // turn the numerator/denominator pairs into efficiencies, named as the plotting macro expects
+  for (unsigned i = 0; i < effReconstructible.size(); i++) {
+    if (!TEfficiency::CheckConsistency(*effReconstructed[i], *effReconstructible[i])) {
+      std::cerr << "Inconsistent histograms for " << effReconstructible[i]->GetName() << ".\n";
+      continue;
+    }
+    TEfficiency* eff = new TEfficiency(*effReconstructed[i], *effReconstructible[i]);
+    std::string name = effReconstructible[i]->GetName();
+    eff->SetName(name.substr(0, name.find("_reconstructible")).c_str());
+    eff->SetTitle(effReconstructible[i]->GetTitle());
+    eff->Write();
+  }
   splitTrackClonesMCByEta->Write();
   splitTrackClones_1MissedMCByEta->Write();
   splitTrackClones_2MissedMCByEta->Write();

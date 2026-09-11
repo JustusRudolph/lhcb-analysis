@@ -20,7 +20,7 @@ void plot_clone_histos(unsigned nEvents=5000, unsigned max_scatter=80000,
   } else {
     suffix = Form("_%uev_%s", nEvents, mc_suffix.Data());
   }
-  TString mcHistParent = (Utils::Definitions::analysisRoot + "/hists/clones/mc_hists").c_str();
+  TString mcHistParent = (Utils::Definitions::analysisRoot + "/hists/eff_clone_ghosts/mc_hists").c_str();
   TString histosPath = mcHistParent + suffix + ".root";
 
   TFile* file = TFile::Open(histosPath);

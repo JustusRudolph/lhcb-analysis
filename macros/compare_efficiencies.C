@@ -13,13 +13,13 @@
 #include "utils/definitions.h"
 #include "utils/basic_functions.h"
 
-// has to stay in sync with the names written by get_efficiencies.C
+// has to stay in sync with the names written by get_eff_clone_ghosts.C
 const std::vector<std::string> kEfficiencyTypes = {"Pt", "Eta", "docaz"};
 const std::vector<int> kCompareColors =
   {kMagenta, kBlue, kRed, kGreen + 2, kOrange + 7, kBlack, kCyan + 2};
 const std::vector<int> kCompareMarkers = {20, 21, 22, 23, 33, 34, 29};
 
-// ranges are per variable, they used to be set while plotting in get_efficiencies.C
+// ranges are per variable, they are only known once the pad has been painted
 void set_efficiency_ranges(TEfficiency* eff, const std::string& type, bool isForward) {
   TGraphAsymmErrors* graph = eff->GetPaintedGraph();
   if (!graph) return;  // only painted after the pad has been updated
@@ -109,12 +109,13 @@ void draw_rate_comparison(const std::vector<TFile*>& files, const std::vector<TS
 }
 
 /*
- * Compare the efficiencies of two or more datasets written by get_efficiencies.C.
- * histNames are file names (without .root) inside hists/efficiency, labels are what ends up
- * in the legend and default to the file names. One PDF is written per region.
+ * Compare the efficiencies, ghost and clone rates of two or more datasets written by
+ * get_eff_clone_ghosts.C. histNames are file names (without .root) inside hists/eff_clone_ghosts,
+ * labels
+ * are what ends up in the legend and default to the file names. One PDF is written per region.
  *
- * e.g. root -l 'compare_efficiencies.C({"efficiencies_5000ev_20nm_0ps",
- *                                       "efficiencies_5000ev_80000nm_0ps"}, {"20nm", "80000nm"})'
+ * e.g. root -l 'compare_efficiencies.C({"mc_hists_5000ev_20nm_0ps",
+ *                                       "mc_hists_5000ev_80000nm_0ps"}, {"20nm", "80000nm"})'
  */
 void compare_efficiencies(std::vector<TString> histNames, std::vector<TString> labels={},
                           TString outName="") {
@@ -124,7 +125,7 @@ void compare_efficiencies(std::vector<TString> histNames, std::vector<TString> l
     std::cerr << "Error: give at least two hist names to compare." << std::endl;
     return;
   }
-  TString histPath = (Utils::Definitions::analysisRoot + "/hists/efficiency/").c_str();
+  TString histPath = (Utils::Definitions::analysisRoot + "/hists/eff_clone_ghosts/").c_str();
   std::vector<TFile*> files{};
   std::vector<TString> usedLabels{};
   for (unsigned i = 0; i < histNames.size(); i++) {
