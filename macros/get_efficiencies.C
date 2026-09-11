@@ -99,7 +99,8 @@ void get_efficiencies(unsigned nEvents=5000, unsigned max_scatter=80000,
     TString(Utils::Definitions::analysisRoot + "/hists/clones/mc_hists") + input_suffix;
   TFile* mc_histo_file = TFile::Open(mcHistPath);
   if (!mc_histo_file || mc_histo_file->IsZombie()) {
-    std::cerr << "Warning: " << mcHistPath << " not found, skipping ghost and clone rates.\n";
+    std::cerr << "Warning: " << mcHistPath << " not found, skipping ghost and clone rates."
+              << "\nRun get_clone_rates.C to generate them first." << std::endl;
   } else {
     for (unsigned i = 0; i < rateNames.size(); i++) {
       rates[i] = (TProfile*) mc_histo_file->Get(rateNames[i].c_str());
