@@ -125,7 +125,7 @@ void compare_efficiencies(std::vector<TString> histNames, std::vector<TString> l
     std::cerr << "Error: give at least two hist names to compare." << std::endl;
     return;
   }
-  TString histPath = (Utils::Definitions::analysisRoot + "/hists/eff_clone_ghosts/").c_str();
+  TString histPath = (Utils::Definitions::analysisRoot + "/hists/eff_clone_ghosts/mc_hists_").c_str();
   std::vector<TFile*> files{};
   std::vector<TString> usedLabels{};
   for (unsigned i = 0; i < histNames.size(); i++) {

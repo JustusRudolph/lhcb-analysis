@@ -189,7 +189,8 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   for (unsigned i_mct = 0; i_mct < nMCTracks; i_mct++) {
     // print progress
     if (i_mct && (i_mct % 1000000 == 0))
-      printf("Finished with %d%% of MC Tracks.\n", (int) (100. * (float) i_mct / nMCTracks));
+      printf("Finished with %d%% of MC Tracks: %u out of %u.\n",
+        (int) (100. * (float) i_mct / nMCTracks), i_mct, nMCTracks);
     
     mcTrackTree->GetEntry(i_mct);
     // if (abs(mcPID) == 11 || nMCVeloHits < 3) {  // don't consider electrons or non-seedable tracks
