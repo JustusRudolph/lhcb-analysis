@@ -88,7 +88,7 @@ void check_split_track_clones(unsigned nEvents=5000, unsigned max_scatter=80,
   // angle bins, this is the deflection per z^2 expressed as the angle it corresponds to
   int nAngleBins = 100;
   std::vector<float> angleBinEdges(nAngleBins + 1);
-  float angleMax{0.2}, angleMin{0.};  // in rad, 0.2 is already a very large deflection
+  float angleMax{0.04}, angleMin{0.};  // in rad, larger deflections are essentially empty
   float angleStep = (angleMax - angleMin) / (nAngleBins);
   for (unsigned i = 0; i <= nAngleBins; i++) {
     angleBinEdges[i] = angleMin + angleStep * i;
