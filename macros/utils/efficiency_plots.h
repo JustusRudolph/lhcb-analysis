@@ -44,19 +44,20 @@ namespace Utils::EfficiencyPlots {
   }
 
   // ranges are per variable, they are only known once the pad has been painted
-  inline void setEfficiencyRanges(TEfficiency* eff, const std::string& type, bool isForward) {
+  inline void setEfficiencyRanges(TEfficiency* eff, const std::string& type,
+                                  bool isForward, const float minEff) {
     TGraphAsymmErrors* graph = eff->GetPaintedGraph();
     if (!graph) return;  // only painted after the pad has been updated
     if (type == "Eta") {
       if (isForward) graph->GetXaxis()->SetRangeUser(2., 5.);
       else graph->GetXaxis()->SetRangeUser(-5., -2.);
-      graph->GetYaxis()->SetRangeUser(0.8, 1.01);
+      graph->GetYaxis()->SetRangeUser(minEff, 1.05);
     } else if (type == "docaz") {
       graph->GetXaxis()->SetRangeUser(0., 7.);
-      graph->GetYaxis()->SetRangeUser(0., 1.01);
+      graph->GetYaxis()->SetRangeUser(minEff, 1.05);
     } else if (type == "Pt") {
       graph->GetXaxis()->SetRangeUser(0., 5000.);
-      graph->GetYaxis()->SetRangeUser(0.8, 1.01);
+      graph->GetYaxis()->SetRangeUser(minEff, 1.05);
     }
   }
 
@@ -64,7 +65,9 @@ namespace Utils::EfficiencyPlots {
    * Overlay one variable of all given files into the current pad. With a single file this is
    * simply that file's efficiency, with the legend still telling which dataset it is.
    */
-  inline void drawEfficiency(const std::vector<TFile*>& files, const std::vector<TString>& labels,
+  inline void drawEfficiency(const std::vector<TFile*>& files,
+                             const std::vector<TString>& labels,
+                             const float minEff,
                              const std::string& type, bool isForward) {
     std::string region = (isForward ? "forward" : "backward");
     std::string histName = "efficiency_" + region + "_" + type;
@@ -85,13 +88,14 @@ namespace Utils::EfficiencyPlots {
       eff->SetMarkerStyle(kMarkers[i % kMarkers.size()]);
       eff->SetMarkerSize(0.7);
       eff->Draw(firstDrawn ? "SAME P" : "AP");
-      legend->AddEntry(eff, labels[i], "lp");
+      if (labels.size() > i)
+        legend->AddEntry(eff, labels[i], "lp");
       if (!firstDrawn) firstDrawn = eff;
     }
     if (!firstDrawn) return;  // nothing in this pad
     gPad->Update();  // painted graph of the first one carries the axes
-    setEfficiencyRanges(firstDrawn, type, isForward);
-    legend->Draw();
+    setEfficiencyRanges(firstDrawn, type, isForward, minEff);
+    if (labels.size() > 0) legend->Draw();
     gPad->Update();
   }
 
@@ -126,22 +130,27 @@ namespace Utils::EfficiencyPlots {
         rate->GetXaxis()->SetRangeUser(0., 5000.);
       }
       rate->Draw(anyDrawn ? "SAME" : "");
-      legend->AddEntry(rate, labels[i], "lp");
+      
+      if (labels.size() > i)
+        legend->AddEntry(rate, labels[i], "lp");
       anyDrawn = true;
     }
-    if (anyDrawn) legend->Draw();
+    if (anyDrawn && labels.size() > 0) legend->Draw();
   }
 
   /*
    * The whole canvas for one region: efficiencies on the top row, ghost and clone rates on the
    * bottom one.
    */
-  inline void drawRegion(const std::vector<TFile*>& files, const std::vector<TString>& labels,
+  inline void drawRegion(const std::vector<TFile*>& files,
+                         const std::vector<TString>& labels,
+                         const std::vector<float>& minEffs,
                          bool isForward, TCanvas* canvas) {
     canvas->Divide(3, 2);
     for (unsigned typeIndex = 0; typeIndex < kEfficiencyTypes.size(); typeIndex++) {
       canvas->cd(typeIndex + 1);
-      drawEfficiency(files, labels, kEfficiencyTypes[typeIndex], isForward);
+      drawEfficiency(files, labels, minEffs[typeIndex],
+                     kEfficiencyTypes[typeIndex], isForward);
     }
     canvas->cd(4);
     drawRate(files, labels, "ghost_rates", "Ghost Rates;#eta;Ghost Rate", true, isForward, 0.1);
@@ -155,13 +164,15 @@ namespace Utils::EfficiencyPlots {
   /*
    * Write one PDF per region, named <outputBase>_forward.pdf and <outputBase>_backward.pdf.
    */
-  inline void drawAndSave(const std::vector<TFile*>& files, const std::vector<TString>& labels,
+  inline void drawAndSave(const std::vector<TFile*>& files,
+                          const std::vector<TString>& labels,
+                          const std::vector<float>& minEffs,
                           const TString& outputBase) {
     for (bool isForward : {true, false}) {
       TString region = (isForward ? "forward" : "backward");
       TCanvas* canvas =
         new TCanvas("canvas_" + region, region + " Region Efficiencies", 1500, 800);
-      drawRegion(files, labels, isForward, canvas);
+      drawRegion(files, labels, minEffs, isForward, canvas);
       canvas->SaveAs(outputBase + "_" + region + ".pdf");
       delete canvas;
     }

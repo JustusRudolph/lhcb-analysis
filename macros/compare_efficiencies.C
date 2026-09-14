@@ -17,7 +17,9 @@
  * e.g. root -l 'compare_efficiencies.C({"5000ev_20nm_0ps", "5000ev_80000nm_0ps"},
  *                                      {"20nm", "80000nm"})'
  */
-void compare_efficiencies(std::vector<TString> histNames, std::vector<TString> labels={},
+void compare_efficiencies(std::vector<TString> histNames,
+                          std::vector<TString> labels={},
+                          std::vector<float> minEffs={0.9, 0.9, 0.8},
                           TString outName="") {
   gROOT->SetBatch();  // so stuff isn't autoplotted
   gStyle->SetOptStat(0);  // remove the info box
@@ -45,7 +47,7 @@ void compare_efficiencies(std::vector<TString> histNames, std::vector<TString> l
   TString outputBase =
     TString((Utils::Definitions::analysisRoot + "/output/efficiency/").c_str()) + outName;
 
-  Utils::EfficiencyPlots::drawAndSave(files, usedLabels, outputBase);
+  Utils::EfficiencyPlots::drawAndSave(files, usedLabels, minEffs, outputBase);
 
   for (TFile* file : files) {
     file->Close();
