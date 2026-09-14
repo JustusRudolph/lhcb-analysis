@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -79,6 +80,37 @@ namespace Utils::EfficiencyPlots {
     return std::make_pair(lowest - 0.05, std::max(highest + 0.05, 1.01));
   }
 
+  // the x range that is drawn for the rates, the eta profiles hold both regions
+  inline std::pair<double, double> rateXRange(bool isVsEta, bool isForward) {
+    if (!isVsEta) return std::make_pair(0., 5000.);
+    return isForward ? std::make_pair(1., 5.5) : std::make_pair(-5.5, -1.);
+  }
+
+  /*
+   * Same idea as efficiencyYRange, but the bottom is kept at -0.01 at the lowest so that rates
+   * sitting at zero do not push the axis far into the negatives. Bins without entries are
+   * skipped, a TProfile reports those as zero.
+   */
+  inline std::pair<double, double> rateYRange(const std::vector<TProfile*>& rates,
+                                              double xMin, double xMax) {
+    double lowest = std::numeric_limits<double>::max();
+    double highest = std::numeric_limits<double>::lowest();
+    bool anyFilled = false;
+    for (TProfile* rate : rates) {
+      for (int bin = 1; bin <= rate->GetNbinsX(); bin++) {
+        if (rate->GetBinEntries(bin) == 0) continue;  // nothing filled this bin
+        double x = rate->GetBinCenter(bin);
+        if (x < xMin || x > xMax) continue;  // outside of what is drawn
+        double value = rate->GetBinContent(bin);
+        lowest = std::min(lowest, value);
+        highest = std::max(highest, value);
+        anyFilled = true;
+      }
+    }
+    if (!anyFilled) return std::make_pair(-0.01, 0.1);
+    return std::make_pair(std::max(lowest - 0.05, -0.01), highest + 0.05);
+  }
+
   // ranges are per variable, they are only known once the pad has been painted
   inline void setEfficiencyRanges(TEfficiency* eff, const std::string& type, bool isForward,
                                   const std::pair<double, double>& yRange) {
@@ -136,10 +168,12 @@ namespace Utils::EfficiencyPlots {
    */
   inline void drawRate(const std::vector<TFile*>& files, const std::vector<TString>& labels,
                        const std::string& histName, const std::string& title,
-                       bool isVsEta, bool isForward, double yMax) {
+                       bool isVsEta, bool isForward) {
     TLegend* legend = new TLegend(0.6, 0.65, 0.88, 0.85);
     legend->SetBorderSize(0);
-    bool anyDrawn = false;
+    // fetch and style first, the y range needs all of them before anything is drawn
+    std::vector<TProfile*> rates{};
+    std::vector<unsigned> fileIndices{};
     for (unsigned i = 0; i < files.size(); i++) {
       TProfile* rate = (TProfile*) files[i]->Get(histName.c_str());
       if (!rate) {
@@ -153,20 +187,20 @@ namespace Utils::EfficiencyPlots {
       rate->SetMarkerStyle(kMarkers[i % kMarkers.size()]);
       rate->SetMarkerSize(0.7);
       rate->SetTitle(title.c_str());
-      rate->GetYaxis()->SetRangeUser(0., yMax);
-      if (isVsEta) {
-        if (isForward) rate->GetXaxis()->SetRangeUser(1., 5.5);
-        else rate->GetXaxis()->SetRangeUser(-5.5, -1.);
-      } else {
-        rate->GetXaxis()->SetRangeUser(0., 5000.);
-      }
-      rate->Draw(anyDrawn ? "SAME" : "");
-      
-      if (labels.size() > i)
-        legend->AddEntry(rate, labels[i], "lp");
-      anyDrawn = true;
+      rates.push_back(rate);
+      fileIndices.push_back(i);
     }
-    if (anyDrawn && labels.size() > 0) legend->Draw();
+    if (rates.empty()) return;  // nothing in this pad
+    std::pair<double, double> xRange = rateXRange(isVsEta, isForward);
+    std::pair<double, double> yRange = rateYRange(rates, xRange.first, xRange.second);
+    for (unsigned i = 0; i < rates.size(); i++) {
+      rates[i]->GetXaxis()->SetRangeUser(xRange.first, xRange.second);
+      rates[i]->GetYaxis()->SetRangeUser(yRange.first, yRange.second);
+      rates[i]->Draw(i ? "SAME" : "");
+      if (labels.size() > fileIndices[i])
+        legend->AddEntry(rates[i], labels[fileIndices[i]], "lp");
+    }
+    if (labels.size() > 0) legend->Draw();
   }
 
   /*
@@ -182,12 +216,12 @@ namespace Utils::EfficiencyPlots {
       drawEfficiency(files, labels, kEfficiencyTypes[typeIndex], isForward);
     }
     canvas->cd(4);
-    drawRate(files, labels, "ghost_rates", "Ghost Rates;#eta;Ghost Rate", true, isForward, 0.1);
+    drawRate(files, labels, "ghost_rates", "Ghost Rates;#eta;Ghost Rate", true, isForward);
     canvas->cd(5);
-    drawRate(files, labels, "clone_rate", "Clone Rates;#eta;Clone Rate", true, isForward, 0.1);
+    drawRate(files, labels, "clone_rate", "Clone Rates;#eta;Clone Rate", true, isForward);
     canvas->cd(6);
     drawRate(files, labels, "clone_rate_pt", "Clone Rates;p_{T} (MeV);Clone Rate",
-             false, isForward, 0.1);
+             false, isForward);
   }
 
   /*
