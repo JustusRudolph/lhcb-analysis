@@ -24,16 +24,14 @@ const std::vector<std::string> kOutlierTimeHists = {
 /*
  * Draw the canvas that check_outlier_times.C used to draw directly, from the histograms
  * written by get_outlier_times.C. The dataset is picked the same way as there, histName
- * overrides that if the hists were written under a different name. The PDF keeps the name
- * it had before, so pass outName when plotting more than one dataset.
+ * overrides that if the hists were written under a different name.
  */
 void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
-                        TString mc_file_suffix="", TString outName="outlier_times",
-                        TString histName="") {
+                        TString mc_file_suffix="", TString histName="") {
   gROOT->SetBatch();  // so stuff isn't autoplotted
   gStyle->SetOptStat(0); // remove the info box for the plots
+  TString suffix;
   if (histName.IsNull()) {
-    TString suffix;
     if (mc_file_suffix.IsNull()) {
       suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
     } else {
@@ -211,7 +209,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   // save canvas
   TString outputDir = (Utils::Definitions::analysisRoot + "output/4d_tracking").c_str();
   gSystem->mkdir(outputDir, true);
-  TString outputPath = outputDir + "/" + outName + ".pdf";
+  TString outputPath = outputDir + "/outlier_times_" + suffix + ".pdf";
   canvas->SaveAs(outputPath);
   std::cout << "Canvas saved to: " << outputPath << std::endl;
 
