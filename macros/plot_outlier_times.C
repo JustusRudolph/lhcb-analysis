@@ -221,7 +221,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   // save canvas
   TString outputDir = (Utils::Definitions::analysisRoot + "output/4d_tracking").c_str();
   gSystem->mkdir(outputDir, true);
-  TString outputPath = outputDir + "/outlier_times_" + suffix + ".pdf";
+  TString outputPath = outputDir + "/outlier_times" + suffix + ".pdf";
   canvas->SaveAs(outputPath);
   std::cout << "Canvas saved to: " << outputPath << std::endl;
 
