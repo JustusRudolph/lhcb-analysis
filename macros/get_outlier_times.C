@@ -15,16 +15,27 @@
 /*
  * Fill the seeding/forwarding #Deltat histograms of one dataset and write them to
  * hists/4d_tracking, so that plot_outlier_times.C draws them and compare_outlier_times.C
- * can take ratios between two datasets. outName picks the file name to write to.
+ * can take ratios between two datasets. outName defaults to the usual data suffix.
  */
-void get_outlier_times(std::string mcFilePath="MCData_Checking.root",
-                       float t_res=0.05, float t_stddevs=3., float tWack=700.0,
-                       TString outName="outlier_times_hists") {
-  TFile *file = TFile::Open((Utils::Definitions::stackRoot + mcFilePath).c_str());
+// max_dt is in picoseconds and scatter in micrometers
+void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
+                       TString mc_file_suffix="", float t_res=0.05, float t_stddevs=3.,
+                       float tWack=700.0, TString outName="") {
+  TString suffix;
+  if (mc_file_suffix.IsNull()) {
+    suffix = Utils::Functions::get_suffix(nEvents, max_scatter, max_dt);
+  } else {
+    suffix = Form("_%uev_%s", nEvents, mc_file_suffix.Data());
+  }
+  TString input_prefix = (Utils::Definitions::stackRoot + "output/MCData_Checking").c_str();
+  TString filepath = input_prefix + suffix + ".root";
+
+  TFile *file = TFile::Open(filepath);
   if (!file || file->IsZombie()) {
-      std::cerr << "Error: Could not open ROOT file." << std::endl;
+      std::cerr << "Error: Could not open " << filepath << std::endl;
       return;
   }
+  if (outName.IsNull()) outName = TString("outlier_times_hists") + suffix;
   // get mc track tree
   TTree* mcTrackTree = (TTree*) file->Get("MCTrackData");
   if (!mcTrackTree) {
