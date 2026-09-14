@@ -1,6 +1,7 @@
 #include <TFile.h>
-#include <TTree.h>
 #include <TMath.h>
+#include <TSystem.h>
+#include <TTree.h>
 #include <iostream>
 #include <vector>
 #include <unordered_set>
@@ -11,10 +12,14 @@
 #include "utils/allen_functions.h"
 #include "utils/basic_functions.h"
 
-void check_outlier_times(std::string mcFilePath="MCData_Checking.root",
-                         float t_res=0.05, float t_stddevs=3., float tWack=700.0) {
-  gStyle->SetOptStat(0); // remove the info box for the plots
-
+/*
+ * Fill the seeding/forwarding #Deltat histograms of one dataset and write them to
+ * hists/4d_tracking, so that plot_outlier_times.C draws them and compare_outlier_times.C
+ * can take ratios between two datasets. outName picks the file name to write to.
+ */
+void get_outlier_times(std::string mcFilePath="MCData_Checking.root",
+                       float t_res=0.05, float t_stddevs=3., float tWack=700.0,
+                       TString outName="outlier_times_hists") {
   TFile *file = TFile::Open((Utils::Definitions::stackRoot + mcFilePath).c_str());
   if (!file || file->IsZombie()) {
       std::cerr << "Error: Could not open ROOT file." << std::endl;
@@ -212,153 +217,30 @@ void check_outlier_times(std::string mcFilePath="MCData_Checking.root",
   printf("Number of MCPs not in eta acceptance: %u\n", n_not_in_eta_acceptance);
   printf("Total number of accepted forwarded hits: %u\n", (unsigned) h_dt_forwarding_forward->GetEntries());
   printf("Number of tracks with first two hits in the same module: %u\n", n_tracks_hit01_same_module);
-  // save histograms and make canvas
-  TCanvas* canvas = new TCanvas("canvas", "Outlier Times", 1200, 1200);
-  canvas->Divide(2, 3);
-  canvas->cd(1);
-  // draw h0 and h2
-  h_dt0_forward->SetTitle("Seeding time scatter from t_{0}^{est} and t_{2}^{est} (normalised)");
-  h_dt0_forward->SetLineColor(kBlue);
-  h_dt2_forward->SetLineColor(kRed);
-  // make colours on backward plots same but more transparent
-  h_dt0_backward->SetLineColorAlpha(kBlue, 0.25);
-  h_dt2_backward->SetLineColorAlpha(kRed, 0.25);
-  h_dt0_forward->Scale(1.0 / h_dt0_forward->Integral());
-  h_dt2_forward->Scale(1.0 / h_dt2_forward->Integral());
-  h_dt0_backward->Scale(1.0 / h_dt0_backward->Integral());
-  h_dt2_backward->Scale(1.0 / h_dt2_backward->Integral());
-  h_dt0_forward->Draw("HIST");
-  h_dt0_forward->GetXaxis()->SetTitle("#Deltat (ns)");
-  h_dt2_forward->Draw("HIST SAME");
-  h_dt0_backward->Draw("HIST SAME");
-  h_dt2_backward->Draw("HIST SAME");
-  h_dt0_forward->GetYaxis()->SetRangeUser(0, 0.15);
-  h_dt0_forward->GetXaxis()->SetRangeUser(-0.3, 0.3);
-  // draw legend
-  TLegend* legend_dt_seeding = new TLegend(0.6, 0.6, 0.88, 0.8);
-  legend_dt_seeding->SetBorderSize(0);
-  legend_dt_seeding->AddEntry(h_dt0_forward, Form("#Deltat_{0}^{f} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt0_forward->GetMean() * 1000 ), (int) (h_dt0_forward->GetStdDev() * 1000) ), "l");
-  legend_dt_seeding->AddEntry(h_dt2_forward, Form("#Deltat_{2}^{f} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt2_forward->GetMean() * 1000 ), (int) (h_dt2_forward->GetStdDev() * 1000) ), "l");
-  legend_dt_seeding->AddEntry(h_dt0_backward, Form("#Deltat_{0}^{b} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt0_backward->GetMean() * 1000 ), (int) (h_dt0_backward->GetStdDev() * 1000) ), "l");
-  legend_dt_seeding->AddEntry(h_dt2_backward, Form("#Deltat_{2}^{b} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt2_backward->GetMean() * 1000 ), (int) (h_dt2_backward->GetStdDev() * 1000) ), "l");
-  legend_dt_seeding->Draw();
-  
-  canvas->cd(2);
-  // plot the 3 histograms for hit indices 5, 10, and 15 on the same canvas
-  // use copy of h_dt_forwarding_forward to not modify previous plot (if we use it later again)
-  TH1D* h_dt_forwarding_forward_copy = (TH1D*) h_dt_forwarding_forward->Clone();
-  h_dt_forwarding_forward_copy->SetLineColor(kBlack);
-  h_dt_forwarding_forward_h5->SetLineColor(kRed);
-  h_dt_forwarding_forward_h10->SetLineColor(kBlue);
-  h_dt_forwarding_forward_h15->SetLineColor(kGreen);
-  // normalise the histograms
-  h_dt_forwarding_forward_copy->Scale(1.0 / h_dt_forwarding_forward_copy->Integral());
-  h_dt_forwarding_forward_h5->Scale(1.0 / h_dt_forwarding_forward_h5->Integral());
-  h_dt_forwarding_forward_h10->Scale(1.0 / h_dt_forwarding_forward_h10->Integral());
-  h_dt_forwarding_forward_h15->Scale(1.0 / h_dt_forwarding_forward_h15->Integral());
-  // draw as histograms not as lines
-  h_dt_forwarding_forward_copy->Draw("HIST");
-  h_dt_forwarding_forward_h5->Draw("HIST SAME");
-  h_dt_forwarding_forward_h10->Draw("HIST SAME");
-  h_dt_forwarding_forward_h15->Draw("HIST SAME");
-  h_dt_forwarding_forward_copy->SetTitle("#Deltat scatter for forwarded hits (norm, forward)");
-  h_dt_forwarding_forward_copy->GetXaxis()->SetTitle("#Deltat_{forward} (ns)");
-  h_dt_forwarding_forward_copy->GetYaxis()->SetRangeUser(0, 0.15);
-  h_dt_forwarding_forward_copy->GetXaxis()->SetRangeUser(-0.5, 0.5);
-  // legend
-  float mu_all = h_dt_forwarding_forward->GetMean();
-  float mu_5 = h_dt_forwarding_forward_h5->GetMean();
-  float mu_10 = h_dt_forwarding_forward_h10->GetMean();
-  float mu_15 = h_dt_forwarding_forward_h15->GetMean();
-  TLegend* legend = new TLegend(0.6, 0.6, 0.88, 0.8);
-  legend->SetBorderSize(0);
-  legend->AddEntry(h_dt_forwarding_forward_copy, Form("All forwarded (#mu = %d ps)", (int) (mu_all * 1000)), "l");
-  legend->AddEntry(h_dt_forwarding_forward_h5, Form("Hit index 5 (#mu = %d ps)", (int) (mu_5 * 1000)), "l");
-  legend->AddEntry(h_dt_forwarding_forward_h10, Form("Hit index 10 (#mu = %d ps)", (int) (mu_10 * 1000)), "l");
-  legend->AddEntry(h_dt_forwarding_forward_h15, Form("Hit index 15 (#mu = %d ps)", (int) (mu_15 * 1000)), "l");
-  legend->Draw();
-
-  canvas->cd(3);
-  // plot 2D histogram of dt vs module ID for forwarded hits
-  // log scale on z axis
-  h_dt_forwarding_vs_moduleID->Draw("COLZ");
-  h_dt_forwarding_vs_moduleID->GetYaxis()->SetTitle("#Deltat (ns)");
-  h_dt_forwarding_vs_moduleID->SetTitle("#Deltat scatter vs module ID for all forwarded hits");
-  gPad->SetLogz();
-
-  canvas->cd(4);
-  TH1D* h_dt_forwarding_backward_copy = (TH1D*) h_dt_forwarding_backward->Clone();
-  h_dt_forwarding_backward_copy->SetLineColor(kBlack);
-  h_dt_forwarding_backward_h5->SetLineColor(kRed);
-  h_dt_forwarding_backward_h10->SetLineColor(kBlue);
-  h_dt_forwarding_backward_h15->SetLineColor(kGreen);
-  // normalise the histograms
-  h_dt_forwarding_backward_copy->Scale(1.0 / h_dt_forwarding_backward_copy->Integral());
-  h_dt_forwarding_backward_h5->Scale(1.0 / h_dt_forwarding_backward_h5->Integral());
-  h_dt_forwarding_backward_h10->Scale(1.0 / h_dt_forwarding_backward_h10->Integral());
-  h_dt_forwarding_backward_h15->Scale(1.0 / h_dt_forwarding_backward_h15->Integral());
-  // draw as histograms not as lines
-  h_dt_forwarding_backward_copy->Draw("HIST");
-  h_dt_forwarding_backward_h5->Draw("HIST SAME");
-  h_dt_forwarding_backward_h10->Draw("HIST SAME");
-  // h_dt_forwarding_backward_h15->Draw("HIST SAME");
-  h_dt_forwarding_backward_copy->SetTitle("#Deltat scatter for forwarded hits (norm, backward)");
-  h_dt_forwarding_backward_copy->GetXaxis()->SetTitle("#Deltat_{forward} (ns)");
-  h_dt_forwarding_backward_copy->GetYaxis()->SetRangeUser(0, 0.15);
-  h_dt_forwarding_backward_copy->GetXaxis()->SetRangeUser(-0.5, 0.5);
-  // legend
-  float mu_all_backward = h_dt_forwarding_backward->GetMean();
-  float mu_5_backward = h_dt_forwarding_backward_h5->GetMean();
-  float mu_10_backward = h_dt_forwarding_backward_h10->GetMean();
-  float mu_15_backward = h_dt_forwarding_backward_h15->GetMean();
-
-  TLegend* legend_backward = new TLegend(0.55, 0.7, 0.89, 0.8);
-  legend_backward->SetBorderSize(0);
-  legend_backward->AddEntry(h_dt_forwarding_backward_copy, Form("All forwarded (#mu = %d ps)", (int) (mu_all_backward * 1000)), "l");
-  legend_backward->AddEntry(h_dt_forwarding_backward_h5, Form("Hit index 5 (#mu = %d ps)", (int) (mu_5_backward * 1000)), "l");
-  legend_backward->AddEntry(h_dt_forwarding_backward_h10, Form("Hit index 10 (#mu = %d ps)", (int) (mu_10_backward * 1000)), "l");
-  // legend_backward->AddEntry(h_dt_forwarding_backward_h15, Form("Hit index 15 (#mu = %d ps)", (int) (mu_15_backward * 1000)), "l");
-  legend_backward->Draw();
-
-  canvas->cd(5);
-  // plot 2D histogram of n hits vs module ID for forwarded hits
-  h_nthHits_vs_moduleID->Draw("COLZ");
-  h_nthHits_vs_moduleID->GetYaxis()->SetTitle("Hit number in track");
-  h_nthHits_vs_moduleID->SetTitle("Hit number vs module ID for forwarded hits");
-  gPad->SetLogz();
-
-  // get plot of number of outliers per track & set log scale y axis
-  // gPad->SetLogy();
-  // h_n_outliers->SetTitle("Number of outliers per track");
-  // h_n_outliers->Draw();
-  
-  canvas->cd(6);
-  h_dt_forwarding_vs_nthHit->Draw("COLZ");
-  gPad->SetLogz();
-  
-  // gPad->SetLogy();
-  // h_outlier_position->SetTitle("Position of outlier in track");
-  // h_outlier_position->Draw();
-
-  // save canvas
-  TString outputPath = (Utils::Definitions::analysisRoot + "output/4d_tracking/outlier_times.pdf").c_str();
-  canvas->SaveAs(outputPath);
-  std::cout << "Canvas saved to: " << outputPath << std::endl;
-
-  // save histograms
-  TString histOutputPath = (Utils::Definitions::analysisRoot + "hists/4d_tracking/outlier_times_hists.root").c_str();
+  // save histograms, all of them so that the plotting macros do not need the MC file
+  TString histOutputDir = (Utils::Definitions::analysisRoot + "hists/4d_tracking").c_str();
+  gSystem->mkdir(histOutputDir, true);  // TFile does not create the directory itself
+  TString histOutputPath = histOutputDir + "/" + outName + ".root";
   TFile* histFile = TFile::Open(histOutputPath, "RECREATE");
   h_dt0_forward->Write();
   h_dt2_forward->Write();
   h_dt_forwarding_forward->Write();
+  h_dt_forwarding_forward_h5->Write();
+  h_dt_forwarding_forward_h10->Write();
+  h_dt_forwarding_forward_h15->Write();
+  h_dt0_backward->Write();
+  h_dt2_backward->Write();
+  h_dt_forwarding_backward->Write();
+  h_dt_forwarding_backward_h5->Write();
+  h_dt_forwarding_backward_h10->Write();
+  h_dt_forwarding_backward_h15->Write();
+  h_dt_forwarding_vs_moduleID->Write();
+  h_nthHits_vs_moduleID->Write();
+  h_dt_forwarding_vs_nthHit->Write();
   h_n_outliers->Write();
   h_outlier_position->Write();
+  std::cout << "Histograms saved to: " << histOutputPath << std::endl;
   // clean up
-  delete canvas;
   histFile->Close();
   delete histFile;
   file->Close();
