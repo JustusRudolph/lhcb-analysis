@@ -5,12 +5,24 @@
 #include <TLegend.h>
 #include <TString.h>
 #include <TSystem.h>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include "utils/definitions.h"
 #include "utils/basic_functions.h"
+
+/*
+ * Times are quoted in the legends in ps, rounded to two significant figures,
+ * e.g. 0.1234 ns becomes 120 ps.
+ */
+int to_ps_two_sig_figs(double t_ns) {
+  double t_ps = t_ns * 1000.;
+  if (t_ps == 0.) return 0;
+  double magnitude = std::pow(10., std::floor(std::log10(std::abs(t_ps))) - 1.);
+  return (int) std::lround(std::lround(t_ps / magnitude) * magnitude);
+}
 
 // every histogram the canvas needs, in the order they are fetched and checked
 const std::vector<std::string> kOutlierTimeHists = {
@@ -100,13 +112,13 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   TLegend* legend_dt_seeding = new TLegend(0.6, 0.6, 0.88, 0.8);
   legend_dt_seeding->SetBorderSize(0);
   legend_dt_seeding->AddEntry(h_dt0_forward, Form("#Deltat_{0}^{f} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt0_forward->GetMean() * 1000 ), (int) (h_dt0_forward->GetStdDev() * 1000) ), "l");
+    to_ps_two_sig_figs(h_dt0_forward->GetMean()), to_ps_two_sig_figs(h_dt0_forward->GetStdDev()) ), "l");
   legend_dt_seeding->AddEntry(h_dt2_forward, Form("#Deltat_{2}^{f} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt2_forward->GetMean() * 1000 ), (int) (h_dt2_forward->GetStdDev() * 1000) ), "l");
+    to_ps_two_sig_figs(h_dt2_forward->GetMean()), to_ps_two_sig_figs(h_dt2_forward->GetStdDev()) ), "l");
   legend_dt_seeding->AddEntry(h_dt0_backward, Form("#Deltat_{0}^{b} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt0_backward->GetMean() * 1000 ), (int) (h_dt0_backward->GetStdDev() * 1000) ), "l");
+    to_ps_two_sig_figs(h_dt0_backward->GetMean()), to_ps_two_sig_figs(h_dt0_backward->GetStdDev()) ), "l");
   legend_dt_seeding->AddEntry(h_dt2_backward, Form("#Deltat_{2}^{b} (#mu, #sigma) = (%d, %d) ps",
-    (int) ( h_dt2_backward->GetMean() * 1000 ), (int) (h_dt2_backward->GetStdDev() * 1000) ), "l");
+    to_ps_two_sig_figs(h_dt2_backward->GetMean()), to_ps_two_sig_figs(h_dt2_backward->GetStdDev()) ), "l");
   legend_dt_seeding->Draw();
   
   canvas->cd(2);
@@ -132,16 +144,16 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   h_dt_forwarding_forward_copy->GetYaxis()->SetRangeUser(0, 0.15);
   h_dt_forwarding_forward_copy->GetXaxis()->SetRangeUser(-0.5, 0.5);
   // legend
-  float mu_all = h_dt_forwarding_forward->GetMean();
-  float mu_5 = h_dt_forwarding_forward_h5->GetMean();
-  float mu_10 = h_dt_forwarding_forward_h10->GetMean();
-  float mu_15 = h_dt_forwarding_forward_h15->GetMean();
   TLegend* legend = new TLegend(0.6, 0.6, 0.88, 0.8);
   legend->SetBorderSize(0);
-  legend->AddEntry(h_dt_forwarding_forward_copy, Form("All forwarded (#mu = %d ps)", (int) (mu_all * 1000)), "l");
-  legend->AddEntry(h_dt_forwarding_forward_h5, Form("Hit index 5 (#mu = %d ps)", (int) (mu_5 * 1000)), "l");
-  legend->AddEntry(h_dt_forwarding_forward_h10, Form("Hit index 10 (#mu = %d ps)", (int) (mu_10 * 1000)), "l");
-  legend->AddEntry(h_dt_forwarding_forward_h15, Form("Hit index 15 (#mu = %d ps)", (int) (mu_15 * 1000)), "l");
+  legend->AddEntry(h_dt_forwarding_forward_copy, Form("All forwarded (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_forward->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_forward->GetStdDev())), "l");
+  legend->AddEntry(h_dt_forwarding_forward_h5, Form("Hit index 5 (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_forward_h5->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_forward_h5->GetStdDev())), "l");
+  legend->AddEntry(h_dt_forwarding_forward_h10, Form("Hit index 10 (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_forward_h10->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_forward_h10->GetStdDev())), "l");
+  legend->AddEntry(h_dt_forwarding_forward_h15, Form("Hit index 15 (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_forward_h15->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_forward_h15->GetStdDev())), "l");
   legend->Draw();
 
   canvas->cd(3);
@@ -173,17 +185,17 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   h_dt_forwarding_backward_copy->GetYaxis()->SetRangeUser(0, 0.15);
   h_dt_forwarding_backward_copy->GetXaxis()->SetRangeUser(-0.5, 0.5);
   // legend
-  float mu_all_backward = h_dt_forwarding_backward->GetMean();
-  float mu_5_backward = h_dt_forwarding_backward_h5->GetMean();
-  float mu_10_backward = h_dt_forwarding_backward_h10->GetMean();
-  float mu_15_backward = h_dt_forwarding_backward_h15->GetMean();
 
   TLegend* legend_backward = new TLegend(0.55, 0.7, 0.89, 0.8);
   legend_backward->SetBorderSize(0);
-  legend_backward->AddEntry(h_dt_forwarding_backward_copy, Form("All forwarded (#mu = %d ps)", (int) (mu_all_backward * 1000)), "l");
-  legend_backward->AddEntry(h_dt_forwarding_backward_h5, Form("Hit index 5 (#mu = %d ps)", (int) (mu_5_backward * 1000)), "l");
-  legend_backward->AddEntry(h_dt_forwarding_backward_h10, Form("Hit index 10 (#mu = %d ps)", (int) (mu_10_backward * 1000)), "l");
-  // legend_backward->AddEntry(h_dt_forwarding_backward_h15, Form("Hit index 15 (#mu = %d ps)", (int) (mu_15_backward * 1000)), "l");
+  legend_backward->AddEntry(h_dt_forwarding_backward_copy, Form("All forwarded (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_backward->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_backward->GetStdDev())), "l");
+  legend_backward->AddEntry(h_dt_forwarding_backward_h5, Form("Hit index 5 (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_backward_h5->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_backward_h5->GetStdDev())), "l");
+  legend_backward->AddEntry(h_dt_forwarding_backward_h10, Form("Hit index 10 (#mu, #sigma) = (%d, %d) ps",
+    to_ps_two_sig_figs(h_dt_forwarding_backward_h10->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_backward_h10->GetStdDev())), "l");
+  // legend_backward->AddEntry(h_dt_forwarding_backward_h15, Form("Hit index 15 (#mu, #sigma) = (%d, %d) ps",
+  //   to_ps_two_sig_figs(h_dt_forwarding_backward_h15->GetMean()), to_ps_two_sig_figs(h_dt_forwarding_backward_h15->GetStdDev())), "l");
   legend_backward->Draw();
 
   canvas->cd(5);
