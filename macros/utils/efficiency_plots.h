@@ -8,8 +8,10 @@
 #include <TProfile.h>
 #include <TString.h>
 
+#include <algorithm>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "definitions.h"
@@ -43,22 +45,48 @@ namespace Utils::EfficiencyPlots {
     return file;
   }
 
+  // the x range that is drawn, per variable and region
+  inline std::pair<double, double> efficiencyXRange(const std::string& type, bool isForward) {
+    if (type == "Eta") return isForward ? std::make_pair(2., 5.) : std::make_pair(-5., -2.);
+    if (type == "docaz") return std::make_pair(0., 7.);
+    if (type == "Pt") return std::make_pair(0., 5000.);
+    return std::make_pair(0., 0.);
+  }
+
+  /*
+   * The y range that fits everything drawn in the pad: 0.05 below the lowest and 0.05 above the
+   * highest efficiency of any of the datasets, with the top at least 1.01 so that a perfect
+   * efficiency stays visible. Only bins inside the drawn x range and with something
+   * reconstructible in them count, empty bins would otherwise pull the bottom down to zero.
+   */
+  inline std::pair<double, double> efficiencyYRange(const std::vector<TEfficiency*>& effs,
+                                                    double xMin, double xMax) {
+    double lowest = 1., highest = 0.;
+    bool anyFilled = false;
+    for (TEfficiency* eff : effs) {
+      const TH1* total = eff->GetTotalHistogram();
+      for (int bin = 1; bin <= total->GetNbinsX(); bin++) {
+        if (total->GetBinContent(bin) == 0) continue;  // nothing reconstructible here
+        double x = total->GetBinCenter(bin);
+        if (x < xMin || x > xMax) continue;  // outside of what is drawn
+        double value = eff->GetEfficiency(bin);
+        lowest = std::min(lowest, value);
+        highest = std::max(highest, value);
+        anyFilled = true;
+      }
+    }
+    if (!anyFilled) return std::make_pair(0., 1.01);
+    return std::make_pair(lowest - 0.05, std::max(highest + 0.05, 1.01));
+  }
+
   // ranges are per variable, they are only known once the pad has been painted
-  inline void setEfficiencyRanges(TEfficiency* eff, const std::string& type,
-                                  bool isForward, const float minEff) {
+  inline void setEfficiencyRanges(TEfficiency* eff, const std::string& type, bool isForward,
+                                  const std::pair<double, double>& yRange) {
     TGraphAsymmErrors* graph = eff->GetPaintedGraph();
     if (!graph) return;  // only painted after the pad has been updated
-    if (type == "Eta") {
-      if (isForward) graph->GetXaxis()->SetRangeUser(2., 5.);
-      else graph->GetXaxis()->SetRangeUser(-5., -2.);
-      graph->GetYaxis()->SetRangeUser(minEff, 1.05);
-    } else if (type == "docaz") {
-      graph->GetXaxis()->SetRangeUser(0., 7.);
-      graph->GetYaxis()->SetRangeUser(minEff, 1.05);
-    } else if (type == "Pt") {
-      graph->GetXaxis()->SetRangeUser(0., 5000.);
-      graph->GetYaxis()->SetRangeUser(minEff, 1.05);
-    }
+    std::pair<double, double> xRange = efficiencyXRange(type, isForward);
+    graph->GetXaxis()->SetRangeUser(xRange.first, xRange.second);
+    graph->GetYaxis()->SetRangeUser(yRange.first, yRange.second);
   }
 
   /*
@@ -67,13 +95,13 @@ namespace Utils::EfficiencyPlots {
    */
   inline void drawEfficiency(const std::vector<TFile*>& files,
                              const std::vector<TString>& labels,
-                             const float minEff,
                              const std::string& type, bool isForward) {
     std::string region = (isForward ? "forward" : "backward");
     std::string histName = "efficiency_" + region + "_" + type;
     TLegend* legend = new TLegend(0.6, 0.15, 0.88, 0.35);
     legend->SetBorderSize(0);
     TEfficiency* firstDrawn = nullptr;
+    std::vector<TEfficiency*> drawn{};  // all of them decide the y range
     for (unsigned i = 0; i < files.size(); i++) {
       TEfficiency* eff = (TEfficiency*) files[i]->Get(histName.c_str());
       if (!eff) {
@@ -90,11 +118,14 @@ namespace Utils::EfficiencyPlots {
       eff->Draw(firstDrawn ? "SAME P" : "AP");
       if (labels.size() > i)
         legend->AddEntry(eff, labels[i], "lp");
+      drawn.push_back(eff);
       if (!firstDrawn) firstDrawn = eff;
     }
     if (!firstDrawn) return;  // nothing in this pad
     gPad->Update();  // painted graph of the first one carries the axes
-    setEfficiencyRanges(firstDrawn, type, isForward, minEff);
+    std::pair<double, double> xRange = efficiencyXRange(type, isForward);
+    setEfficiencyRanges(firstDrawn, type, isForward,
+                        efficiencyYRange(drawn, xRange.first, xRange.second));
     if (labels.size() > 0) legend->Draw();
     gPad->Update();
   }
@@ -144,13 +175,11 @@ namespace Utils::EfficiencyPlots {
    */
   inline void drawRegion(const std::vector<TFile*>& files,
                          const std::vector<TString>& labels,
-                         const std::vector<float>& minEffs,
                          bool isForward, TCanvas* canvas) {
     canvas->Divide(3, 2);
     for (unsigned typeIndex = 0; typeIndex < kEfficiencyTypes.size(); typeIndex++) {
       canvas->cd(typeIndex + 1);
-      drawEfficiency(files, labels, minEffs[typeIndex],
-                     kEfficiencyTypes[typeIndex], isForward);
+      drawEfficiency(files, labels, kEfficiencyTypes[typeIndex], isForward);
     }
     canvas->cd(4);
     drawRate(files, labels, "ghost_rates", "Ghost Rates;#eta;Ghost Rate", true, isForward, 0.1);
@@ -166,13 +195,12 @@ namespace Utils::EfficiencyPlots {
    */
   inline void drawAndSave(const std::vector<TFile*>& files,
                           const std::vector<TString>& labels,
-                          const std::vector<float>& minEffs,
                           const TString& outputBase) {
     for (bool isForward : {true, false}) {
       TString region = (isForward ? "forward" : "backward");
       TCanvas* canvas =
         new TCanvas("canvas_" + region, region + " Region Efficiencies", 1500, 800);
-      drawRegion(files, labels, minEffs, isForward, canvas);
+      drawRegion(files, labels, isForward, canvas);
       canvas->SaveAs(outputBase + "_" + region + ".pdf");
       delete canvas;
     }

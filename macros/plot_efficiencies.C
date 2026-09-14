@@ -18,8 +18,7 @@
  */
 // max_dt is in picoseconds and scatter in micrometers
 void plot_efficiencies(unsigned nEvents=5000, unsigned max_scatter=80000, unsigned max_dt=0,
-                       TString mc_file_suffix="", std::vector<float> minEffs={0.9, 0.9, 0.8},
-                       TString label="", TString outName="") {
+                       TString mc_file_suffix="", TString label="", TString outName="") {
   gROOT->SetBatch();  // so stuff isn't autoplotted
   gStyle->SetOptStat(0);  // remove the info box
   TString suffix;
@@ -40,7 +39,7 @@ void plot_efficiencies(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   TString outputBase =
     TString((Utils::Definitions::analysisRoot + "/output/efficiency/").c_str()) + outName;
 
-  Utils::EfficiencyPlots::drawAndSave({file}, labelToPass, minEffs, outputBase);
+  Utils::EfficiencyPlots::drawAndSave({file}, labelToPass, outputBase);
 
   file->Close();
   delete file;

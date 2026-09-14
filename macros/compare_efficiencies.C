@@ -18,9 +18,7 @@
  *                                      {"20nm", "80000nm"})'
  */
 void compare_efficiencies(std::vector<TString> histNames,
-                          std::vector<TString> labels={},
-                          std::vector<float> minEffs={0.9, 0.9, 0.8},
-                          TString outName="") {
+                          std::vector<TString> labels={}, TString outName="") {
   gROOT->SetBatch();  // so stuff isn't autoplotted
   gStyle->SetOptStat(0);  // remove the info box
   if (histNames.size() < 2) {
@@ -47,7 +45,7 @@ void compare_efficiencies(std::vector<TString> histNames,
   TString outputBase =
     TString((Utils::Definitions::analysisRoot + "/output/efficiency/").c_str()) + outName;
 
-  Utils::EfficiencyPlots::drawAndSave(files, usedLabels, minEffs, outputBase);
+  Utils::EfficiencyPlots::drawAndSave(files, usedLabels, outputBase);
 
   for (TFile* file : files) {
     file->Close();
