@@ -3,7 +3,11 @@
 #include <TH1D.h>
 #include <TString.h>
 
+#include <bitset>
+#include <vector>
+
 #include "definitions.h"
+#include "Hit.h"
 
 namespace Utils::Functions {
   
@@ -76,5 +80,24 @@ namespace Utils::Functions {
   delete moduleFile;
 
   return moduleToZVec;
+  }
+
+  /*
+   * Return only the first hit found on each module, keeping the order of the input.
+   * The module ID is the 6-bit field at bit 12 of the LHCbID, so hits sharing a module
+   * also sit on the same z-plane. Two such hits in a row make the dz of an
+   * extrapolation zero, which is what we want to keep out of the forwarding dts.
+   */
+  inline std::vector<Hit::BaseHit> get_unique_module_hits(const std::vector<Hit::BaseHit>& hits) {
+    std::bitset<Utils::Definitions::kModules> seen;
+    std::vector<Hit::BaseHit> unique_hits;
+    unique_hits.reserve(hits.size());
+    for (const Hit::BaseHit& hit : hits) {
+      unsigned module = (hit.id >> 12) & 0x3F;  // 64 modules, i.e. 3F
+      if (seen.test(module)) continue;
+      seen.set(module);
+      unique_hits.push_back(hit);
+    }
+    return unique_hits;
   }
 } // namespace Utils::Functions
