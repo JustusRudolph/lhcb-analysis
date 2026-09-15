@@ -97,6 +97,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   float max_forward_abs_dt = 0.0f;
   int n_not_in_eta_acceptance = 0;
   unsigned n_tracks_hit01_same_module = 0;
+  unsigned n_tracks_too_few_unique_modules = 0;
   float max_dt_sq = t_res * t_res * t_stddevs * t_stddevs;
   printf("max_dt_sq: %.5f\n", max_dt_sq);
 
@@ -121,17 +122,27 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
     // get the dts for each seeding/forwarding stage & write to right histogram
     float filtered_t = 0.0f;
     // printf("BEFORE: t0, t1, t2: %.3f, %.3f, %.3f\n", t->at(0), t->at(1), t->at(2));
-    Hit::BaseHit h0, h1, h2;
-    unsigned kHits = lhcbid->size();
-    if (!mcHitsSortedForward) {  // backwards track, i.e. will sweep in already ordered direction
-      h0 = {lhcbid->at(0), x->at(0), y->at(0), z->at(0), t->at(0)};
-      h1 = {lhcbid->at(1), x->at(1), y->at(1), z->at(1), t->at(1)};
-      h2 = {lhcbid->at(2), x->at(2), y->at(2), z->at(2), t->at(2)};
-    } else {  // forward track, i.e. sweep from last to first hit
-      h0 = {lhcbid->at(kHits - 1), x->at(kHits - 1), y->at(kHits - 1), z->at(kHits - 1), t->at(kHits - 1)};
-      h1 = {lhcbid->at(kHits - 2), x->at(kHits - 2), y->at(kHits - 2), z->at(kHits - 2), t->at(kHits - 2)};
-      h2 = {lhcbid->at(kHits - 3), x->at(kHits - 3), y->at(kHits - 3), z->at(kHits - 3), t->at(kHits - 3)};
+    // Collect the hits in the order the sweep visits them -- backwards tracks in the
+    // stored order, forward tracks from the last hit to the first -- and then keep only
+    // the first hit on each module. Two hits on one module sit on the same z-plane, and
+    // a zero dz sends the extrapolated dt to infinity.
+    std::vector<Hit::BaseHit> track_hits;
+    track_hits.reserve(lhcbid->size());
+    for (unsigned i_hit = 0; i_hit < lhcbid->size(); i_hit++) {
+      unsigned index_to_use = !mcHitsSortedForward ? i_hit : lhcbid->size() - i_hit - 1;
+      track_hits.emplace_back(lhcbid->at(index_to_use), x->at(index_to_use),
+                              y->at(index_to_use), z->at(index_to_use),
+                              t->at(index_to_use));
     }
+    track_hits = Utils::Functions::get_unique_module_hits(track_hits);
+    unsigned kHits = track_hits.size();
+    if (kHits < 3) {  // filtering can leave too few hits to seed with
+      n_tracks_too_few_unique_modules++;
+      continue;
+    }
+    Hit::BaseHit h0 = track_hits[0];
+    Hit::BaseHit h1 = track_hits[1];
+    Hit::BaseHit h2 = track_hits[2];
     // get the dts for the seeding stage
     auto res_seed = Utils::Functions::get_seeding_dts(h0, h1, h2);
     if (std::get<3>(res_seed) > 0) { // positive drhodz is forward track
@@ -153,10 +164,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
     for (unsigned i_hit = 3; i_hit < kHits; i_hit++) {
       h0 = h1;
       h1 = h2;
-      unsigned index_to_use = !mcHitsSortedForward ? i_hit : kHits - i_hit - 1;
-      h2 = Hit::BaseHit(lhcbid->at(index_to_use), x->at(index_to_use),
-                        y->at(index_to_use), z->at(index_to_use),
-                        t->at(index_to_use));
+      h2 = track_hits[i_hit];
       auto res = Utils::Functions::get_next_filtered_t(h0, h1, h2, filtered_t, i_hit);
       float dt_next_hit = std::get<1>(res);
       
@@ -189,10 +197,10 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
         if (i_hit == 10) h_dt_forwarding_backward_h10->Fill(dt_next_hit);
         if (i_hit == 15) h_dt_forwarding_backward_h15->Fill(dt_next_hit);
       }
-      h_dt_forwarding_vs_moduleID->Fill( (lhcbid->at(index_to_use) >> 12) & 0x3F, dt_next_hit );
-      p_dt_forwarding_vs_moduleID->Fill( (lhcbid->at(index_to_use) >> 12) & 0x3F, dt_next_hit );
+      h_dt_forwarding_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, dt_next_hit );
+      p_dt_forwarding_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, dt_next_hit );
       // fill with i+1 because we use the dt of the next hit
-      h_nthHits_vs_moduleID->Fill( (lhcbid->at(index_to_use) >> 12) & 0x3F, i_hit + 1 );
+      h_nthHits_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, i_hit + 1 );
       h_dt_forwarding_vs_nthHit->Fill( i_hit + 1, dt_next_hit );
     }
     // printf("\n");
@@ -234,6 +242,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   printf("Number of MCPs not in eta acceptance: %u\n", n_not_in_eta_acceptance);
   printf("Total number of accepted forwarded hits: %u\n", (unsigned) h_dt_forwarding_forward->GetEntries());
   printf("Number of tracks with first two hits in the same module: %u\n", n_tracks_hit01_same_module);
+  printf("Number of tracks left with fewer than three unique modules: %u\n", n_tracks_too_few_unique_modules);
   // save histograms, all of them so that the plotting macros do not need the MC file
   TString histOutputDir = (Utils::Definitions::analysisRoot + "hists/4d_tracking").c_str();
   gSystem->mkdir(histOutputDir, true);  // TFile does not create the directory itself
