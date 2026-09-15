@@ -1,5 +1,6 @@
 #include <TFile.h>
 #include <TMath.h>
+#include <TProfile.h>
 #include <TSystem.h>
 #include <TTree.h>
 #include <iostream>
@@ -59,6 +60,10 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   TH1D* h_dt_forwarding_backward_h15 = new TH1D("h_dt_forwarding_backward_h15", "dt scatter for hit index 15;dt_{forward} (ns)", 100, -1, 1);
 
   TH2D* h_dt_forwarding_vs_moduleID = new TH2D("h_dt_forwarding_vs_moduleID", "#Deltat scatter vs module ID for forwarded hits;Module ID;dt_{forward} (ns)", 64, -0.5, 63.5, 100, -1, 1);
+  // "s" makes the error bars the standard deviation rather than the error on the mean, so the
+  // profile carries both. Filled directly rather than profiled off the 2D above, which would
+  // silently drop everything beyond its +-1 ns range.
+  TProfile* p_dt_forwarding_vs_moduleID = new TProfile("p_dt_forwarding_vs_moduleID", "#Deltat mean and spread vs module ID of the extrapolated hit;Module ID;dt_{forward} (ns)", 64, -0.5, 63.5, "s");
   TH2D* h_nthHits_vs_moduleID = new TH2D("h_nthHits_vs_moduleID", "Number of hit at module ID for forwarded hits;Module ID;n_{hits}", 64, -0.5, 63.5, 40, -0.5, 39.5);
   TH2D* h_dt_forwarding_vs_nthHit = new TH2D("h_dt_forwarding_vs_nthHit", "#Deltat scatter vs hit number for forwarded hits;Nth hit;dt_{forward} (ns)", 40, -0.5, 39.5, 100, -1, 1);
 
@@ -185,6 +190,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
         if (i_hit == 15) h_dt_forwarding_backward_h15->Fill(dt_next_hit);
       }
       h_dt_forwarding_vs_moduleID->Fill( (lhcbid->at(index_to_use) >> 12) & 0x3F, dt_next_hit );
+      p_dt_forwarding_vs_moduleID->Fill( (lhcbid->at(index_to_use) >> 12) & 0x3F, dt_next_hit );
       // fill with i+1 because we use the dt of the next hit
       h_nthHits_vs_moduleID->Fill( (lhcbid->at(index_to_use) >> 12) & 0x3F, i_hit + 1 );
       h_dt_forwarding_vs_nthHit->Fill( i_hit + 1, dt_next_hit );
@@ -246,6 +252,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   h_dt_forwarding_backward_h10->Write();
   h_dt_forwarding_backward_h15->Write();
   h_dt_forwarding_vs_moduleID->Write();
+  p_dt_forwarding_vs_moduleID->Write();
   h_nthHits_vs_moduleID->Write();
   h_dt_forwarding_vs_nthHit->Write();
   h_n_outliers->Write();
