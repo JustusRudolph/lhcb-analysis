@@ -117,7 +117,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
       continue;
     }
     // NOTE: THE FOLLOWING IS REDUNDANT BECAUSE MCP HITS ARE SORTED BY MODULE FROM 0 TO 63, NOT IN TIME
-    bool mcHitsSortedForward = ( (lhcbid->at(0) >> 12) & 0x3F ) < ( (lhcbid->at(1) >> 12) & 0x3F );
+    bool mcHitsSortedForward = ( (lhcbid->front() >> 12) & 0x3F ) < ( (lhcbid->back() >> 12) & 0x3F );
 
     // get the dts for each seeding/forwarding stage & write to right histogram
     float filtered_t = 0.0f;
