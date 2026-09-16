@@ -3,9 +3,11 @@
 #include <TH1D.h>
 #include <TH2D.h>
 #include <TLegend.h>
+#include <TLine.h>
 #include <TProfile.h>
 #include <TString.h>
 #include <TSystem.h>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -33,7 +35,7 @@ const std::vector<std::string> kOutlierTimeHists = {
   "h_dt_forwarding_backward", "h_dt_forwarding_backward_h5",
   "h_dt_forwarding_backward_h10", "h_dt_forwarding_backward_h15",
   "h_dt_forwarding_vs_moduleID", "h_nthHits_vs_moduleID", "h_dt_forwarding_vs_nthHit",
-  "p_dt_forwarding_vs_moduleID"};
+  "p_dt_forwarding_vs_moduleID", "p_beta_vs_moduleID"};
 
 /*
  * Draw the canvas that check_outlier_times.C used to draw directly, from the histograms
@@ -76,6 +78,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   TH2D* h_nthHits_vs_moduleID = (TH2D*) file->Get("h_nthHits_vs_moduleID");
   TH2D* h_dt_forwarding_vs_nthHit = (TH2D*) file->Get("h_dt_forwarding_vs_nthHit");
   TProfile* p_dt_forwarding_vs_moduleID = (TProfile*) file->Get("p_dt_forwarding_vs_moduleID");
+  TProfile* p_beta_vs_moduleID = (TProfile*) file->Get("p_beta_vs_moduleID");
   std::vector<TH1*> allHists = {
     h_dt0_forward, h_dt2_forward, h_dt0_backward, h_dt2_backward,
     h_dt_forwarding_forward, h_dt_forwarding_forward_h5,
@@ -83,7 +86,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
     h_dt_forwarding_backward, h_dt_forwarding_backward_h5,
     h_dt_forwarding_backward_h10, h_dt_forwarding_backward_h15,
     h_dt_forwarding_vs_moduleID, h_nthHits_vs_moduleID, h_dt_forwarding_vs_nthHit,
-    p_dt_forwarding_vs_moduleID};
+    p_dt_forwarding_vs_moduleID, p_beta_vs_moduleID};
   for (unsigned i = 0; i < allHists.size(); i++) {
     if (!allHists[i]) {
       std::cerr << "Error: " << kOutlierTimeHists[i] << " not found in " << histPath << std::endl;
@@ -229,6 +232,31 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   p_dt_forwarding_vs_moduleID->SetMarkerStyle(20);
   p_dt_forwarding_vs_moduleID->SetMarkerSize(0.7);
   p_dt_forwarding_vs_moduleID->Draw("E1");
+
+  canvas->cd(8);
+  // speed of the forwarded steps as a fraction of c, the deviation from 1 is small so the
+  // y range is zoomed onto the points themselves, keeping 1 in view as the reference
+  p_beta_vs_moduleID->SetLineColor(kBlue);
+  p_beta_vs_moduleID->SetMarkerColor(kBlue);
+  p_beta_vs_moduleID->SetMarkerStyle(20);
+  p_beta_vs_moduleID->SetMarkerSize(0.7);
+  double lowestBeta = 1., highestBeta = 1.;  // start at 1 so the reference line stays in range
+  for (int bin = 1; bin <= p_beta_vs_moduleID->GetNbinsX(); bin++) {
+    if (p_beta_vs_moduleID->GetBinEntries(bin) == 0) continue;
+    double value = p_beta_vs_moduleID->GetBinContent(bin);
+    double error = p_beta_vs_moduleID->GetBinError(bin);
+    lowestBeta = std::min(lowestBeta, value - error);
+    highestBeta = std::max(highestBeta, value + error);
+  }
+  double betaMargin = 0.05 * (highestBeta - lowestBeta);
+  if (betaMargin == 0.) betaMargin = 0.001;  // everything at exactly 1
+  p_beta_vs_moduleID->GetYaxis()->SetRangeUser(lowestBeta - betaMargin, highestBeta + betaMargin);
+  p_beta_vs_moduleID->Draw("E1");
+  gPad->Update();
+  TLine* speedOfLight = new TLine(-0.5, 1., 63.5, 1.);
+  speedOfLight->SetLineStyle(2);
+  speedOfLight->SetLineColor(kGray + 2);
+  speedOfLight->Draw();
 
   // save canvas
   TString outputDir = (Utils::Definitions::analysisRoot + "output/4d_tracking").c_str();
