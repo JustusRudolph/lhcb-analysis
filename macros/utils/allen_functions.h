@@ -129,7 +129,7 @@ namespace Utils {
       float dt2 = t2_expected - h2.t;
 
       
-      float next_t_filtered = ( h2.t + h1.t + h0.t + dt_dz * (2 * h2.t - h1.t - h0.t) ) / 3.;
+      float next_t_filtered = ( h2.t + h1.t + h0.t + dt_dz * (2 * h2.z - h1.z - h0.z) ) / 3.;
       return {next_t_filtered, dt0, dt2, drhodz_sign};
     }
 
