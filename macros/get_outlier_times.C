@@ -64,7 +64,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   // profile carries both. Filled directly rather than profiled off the 2D above, which would
   // silently drop everything beyond its +-1 ns range.
   // default errors, i.e. the error on the mean rather than the spread
-  TProfile* p_beta_vs_moduleID = new TProfile("p_beta_vs_moduleID", "Mean speed of forwarded hits vs module ID;Module ID;v / c", 64, -0.5, 63.5);
+  TProfile* p_inv_beta_vs_moduleID = new TProfile("p_inv_beta_vs_moduleID", "Mean speed of forwarded hits vs module ID;Module ID;#beta", 64, -0.5, 63.5);
   TProfile* p_dt_forwarding_vs_moduleID = new TProfile("p_dt_forwarding_vs_moduleID", "#Deltat mean and spread vs module ID of the extrapolated hit;Module ID;dt_{forward} (ns)", 64, -0.5, 63.5, "s");
   TH2D* h_nthHits_vs_moduleID = new TH2D("h_nthHits_vs_moduleID", "Number of hit at module ID for forwarded hits;Module ID;n_{hits}", 64, -0.5, 63.5, 40, -0.5, 39.5);
   TH2D* h_dt_forwarding_vs_nthHit = new TH2D("h_dt_forwarding_vs_nthHit", "#Deltat scatter vs hit number for forwarded hits;Nth hit;dt_{forward} (ns)", 40, -0.5, 39.5, 100, -1, 1);
@@ -202,15 +202,19 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
       }
       h_dt_forwarding_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, dt_next_hit );
       p_dt_forwarding_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, dt_next_hit );
-      // Speed of this step as a fraction of c: the extrapolation assumes dt/dz at exactly c,
-      // so the time it predicts over this dz divided by the time actually taken is v/c.
+      // Speed of this step relative to c: the extrapolation assumes dt/dz at exactly c, so the
+      // time actually taken divided by the time it predicts over this dz is c/v. It is c/v
+      // rather than v/c that is accumulated, because the time is the noisy one of the two and
+      // averaging it in a denominator biases the mean upwards. plot_outlier_times.C inverts
+      // the mean of each module bin to get back to v/c.
       // Outliers are skipped, a single wacky time would otherwise dominate the module mean.
       float dt_hits = h2.t - h1.t;
-      if (!isOutlier && dt_hits != 0.f) {
+      if (!isOutlier) {
         auto [tx, ty] = Utils::Functions::get_slope(h0, h1);
         float dt_dz_at_c = Utils::Definitions::inv_c_mmns * std::sqrt(1 + (tx * tx + ty * ty));
-        float beta = std::abs( dt_dz_at_c * (h2.z - h1.z) / dt_hits );
-        p_beta_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, beta );
+        float dt_at_c = dt_dz_at_c * (h2.z - h1.z);
+        if (dt_at_c != 0.f)
+          p_inv_beta_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, std::abs(dt_hits / dt_at_c) );
       }
       // fill with i+1 because we use the dt of the next hit
       h_nthHits_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, i_hit + 1 );
@@ -275,7 +279,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   h_dt_forwarding_backward_h15->Write();
   h_dt_forwarding_vs_moduleID->Write();
   p_dt_forwarding_vs_moduleID->Write();
-  p_beta_vs_moduleID->Write();
+  p_inv_beta_vs_moduleID->Write();
   h_nthHits_vs_moduleID->Write();
   h_dt_forwarding_vs_nthHit->Write();
   h_n_outliers->Write();

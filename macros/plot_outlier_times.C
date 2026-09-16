@@ -35,7 +35,7 @@ const std::vector<std::string> kOutlierTimeHists = {
   "h_dt_forwarding_backward", "h_dt_forwarding_backward_h5",
   "h_dt_forwarding_backward_h10", "h_dt_forwarding_backward_h15",
   "h_dt_forwarding_vs_moduleID", "h_nthHits_vs_moduleID", "h_dt_forwarding_vs_nthHit",
-  "p_dt_forwarding_vs_moduleID", "p_beta_vs_moduleID"};
+  "p_dt_forwarding_vs_moduleID", "p_inv_beta_vs_moduleID"};
 
 /*
  * Draw the canvas that check_outlier_times.C used to draw directly, from the histograms
@@ -78,7 +78,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   TH2D* h_nthHits_vs_moduleID = (TH2D*) file->Get("h_nthHits_vs_moduleID");
   TH2D* h_dt_forwarding_vs_nthHit = (TH2D*) file->Get("h_dt_forwarding_vs_nthHit");
   TProfile* p_dt_forwarding_vs_moduleID = (TProfile*) file->Get("p_dt_forwarding_vs_moduleID");
-  TProfile* p_beta_vs_moduleID = (TProfile*) file->Get("p_beta_vs_moduleID");
+  TProfile* p_inv_beta_vs_moduleID = (TProfile*) file->Get("p_inv_beta_vs_moduleID");
   std::vector<TH1*> allHists = {
     h_dt0_forward, h_dt2_forward, h_dt0_backward, h_dt2_backward,
     h_dt_forwarding_forward, h_dt_forwarding_forward_h5,
@@ -86,7 +86,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
     h_dt_forwarding_backward, h_dt_forwarding_backward_h5,
     h_dt_forwarding_backward_h10, h_dt_forwarding_backward_h15,
     h_dt_forwarding_vs_moduleID, h_nthHits_vs_moduleID, h_dt_forwarding_vs_nthHit,
-    p_dt_forwarding_vs_moduleID, p_beta_vs_moduleID};
+    p_dt_forwarding_vs_moduleID, p_inv_beta_vs_moduleID};
   for (unsigned i = 0; i < allHists.size(); i++) {
     if (!allHists[i]) {
       std::cerr << "Error: " << kOutlierTimeHists[i] << " not found in " << histPath << std::endl;
@@ -234,24 +234,36 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   p_dt_forwarding_vs_moduleID->Draw("E1");
 
   canvas->cd(8);
-  // speed of the forwarded steps as a fraction of c, the deviation from 1 is small so the
-  // y range is zoomed onto the points themselves, keeping 1 in view as the reference
-  p_beta_vs_moduleID->SetLineColor(kBlue);
-  p_beta_vs_moduleID->SetMarkerColor(kBlue);
-  p_beta_vs_moduleID->SetMarkerStyle(20);
-  p_beta_vs_moduleID->SetMarkerSize(0.7);
+  // The profile holds c/v, because that is the ratio whose mean is not biased by a noisy
+  // denominator. Invert each module bin to get the path weighted speed back, with the error
+  // propagating as sigma_beta = sigma / mean^2.
+  TH1D* h_beta_vs_moduleID = new TH1D("h_beta_vs_moduleID",
+    "Mean speed of forwarded hits vs module ID;Module ID;#beta",
+    p_inv_beta_vs_moduleID->GetNbinsX(),
+    p_inv_beta_vs_moduleID->GetXaxis()->GetXmin(),
+    p_inv_beta_vs_moduleID->GetXaxis()->GetXmax());
+  h_beta_vs_moduleID->SetDirectory(nullptr);
   double lowestBeta = 1., highestBeta = 1.;  // start at 1 so the reference line stays in range
-  for (int bin = 1; bin <= p_beta_vs_moduleID->GetNbinsX(); bin++) {
-    if (p_beta_vs_moduleID->GetBinEntries(bin) == 0) continue;
-    double value = p_beta_vs_moduleID->GetBinContent(bin);
-    double error = p_beta_vs_moduleID->GetBinError(bin);
-    lowestBeta = std::min(lowestBeta, value - error);
-    highestBeta = std::max(highestBeta, value + error);
+  for (int bin = 1; bin <= p_inv_beta_vs_moduleID->GetNbinsX(); bin++) {
+    if (p_inv_beta_vs_moduleID->GetBinEntries(bin) == 0) continue;
+    double invBeta = p_inv_beta_vs_moduleID->GetBinContent(bin);
+    if (invBeta == 0.) continue;
+    double beta = 1. / invBeta;
+    double error = p_inv_beta_vs_moduleID->GetBinError(bin) / (invBeta * invBeta);
+    h_beta_vs_moduleID->SetBinContent(bin, beta);
+    h_beta_vs_moduleID->SetBinError(bin, error);
+    lowestBeta = std::min(lowestBeta, beta - error);
+    highestBeta = std::max(highestBeta, beta + error);
   }
+  h_beta_vs_moduleID->SetLineColor(kBlue);
+  h_beta_vs_moduleID->SetMarkerColor(kBlue);
+  h_beta_vs_moduleID->SetMarkerStyle(20);
+  h_beta_vs_moduleID->SetMarkerSize(0.7);
+  // the deviation from 1 is small, so zoom onto the points while keeping 1 in view
   double betaMargin = 0.05 * (highestBeta - lowestBeta);
   if (betaMargin == 0.) betaMargin = 0.001;  // everything at exactly 1
-  p_beta_vs_moduleID->GetYaxis()->SetRangeUser(lowestBeta - betaMargin, highestBeta + betaMargin);
-  p_beta_vs_moduleID->Draw("E1");
+  h_beta_vs_moduleID->GetYaxis()->SetRangeUser(lowestBeta - betaMargin, highestBeta + betaMargin);
+  h_beta_vs_moduleID->Draw("E1");
   gPad->Update();
   TLine* speedOfLight = new TLine(-0.5, 1., 63.5, 1.);
   speedOfLight->SetLineStyle(2);
