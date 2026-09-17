@@ -64,7 +64,9 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   // profile carries both. Filled directly rather than profiled off the 2D above, which would
   // silently drop everything beyond its +-1 ns range.
   // default errors, i.e. the error on the mean rather than the spread
-  TProfile* p_inv_beta_vs_moduleID = new TProfile("p_inv_beta_vs_moduleID", "Mean speed of forwarded hits vs module ID;Module ID;#beta", 64, -0.5, 63.5);
+  TProfile* p_inv_beta_vs_moduleID = new TProfile("p_inv_beta_vs_moduleID", "Mean c/v of forwarded hits vs module ID;Module ID;c / v", 64, -0.5, 63.5);
+  // the full c/v distribution per module, so the median can be taken and the tail is visible
+  TH2D* h_inv_beta_vs_moduleID = new TH2D("h_inv_beta_vs_moduleID", "c/v vs module ID for forwarded hits;Module ID;c / v", 64, -0.5, 63.5, 2500, 0., 5.);
   TProfile* p_dt_forwarding_vs_moduleID = new TProfile("p_dt_forwarding_vs_moduleID", "#Deltat mean and spread vs module ID of the extrapolated hit;Module ID;dt_{forward} (ns)", 64, -0.5, 63.5, "s");
   TH2D* h_nthHits_vs_moduleID = new TH2D("h_nthHits_vs_moduleID", "Number of hit at module ID for forwarded hits;Module ID;n_{hits}", 64, -0.5, 63.5, 40, -0.5, 39.5);
   TH2D* h_dt_forwarding_vs_nthHit = new TH2D("h_dt_forwarding_vs_nthHit", "#Deltat scatter vs hit number for forwarded hits;Nth hit;dt_{forward} (ns)", 40, -0.5, 39.5, 100, -1, 1);
@@ -213,8 +215,11 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
         auto [tx, ty] = Utils::Functions::get_slope(h0, h1);
         float dt_dz_at_c = Utils::Definitions::inv_c_mmns * std::sqrt(1 + (tx * tx + ty * ty));
         float dt_at_c = dt_dz_at_c * (h2.z - h1.z);
-        if (dt_at_c != 0.f)
-          p_inv_beta_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, std::abs(dt_hits / dt_at_c) );
+        if (dt_at_c != 0.f) {
+          float inv_beta = std::abs(dt_hits / dt_at_c);
+          p_inv_beta_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, inv_beta );
+          h_inv_beta_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, inv_beta );
+        }
       }
       // fill with i+1 because we use the dt of the next hit
       h_nthHits_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, i_hit + 1 );
@@ -280,6 +285,7 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   h_dt_forwarding_vs_moduleID->Write();
   p_dt_forwarding_vs_moduleID->Write();
   p_inv_beta_vs_moduleID->Write();
+  h_inv_beta_vs_moduleID->Write();
   h_nthHits_vs_moduleID->Write();
   h_dt_forwarding_vs_nthHit->Write();
   h_n_outliers->Write();

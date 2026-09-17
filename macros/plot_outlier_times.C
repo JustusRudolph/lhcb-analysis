@@ -35,7 +35,7 @@ const std::vector<std::string> kOutlierTimeHists = {
   "h_dt_forwarding_backward", "h_dt_forwarding_backward_h5",
   "h_dt_forwarding_backward_h10", "h_dt_forwarding_backward_h15",
   "h_dt_forwarding_vs_moduleID", "h_nthHits_vs_moduleID", "h_dt_forwarding_vs_nthHit",
-  "p_dt_forwarding_vs_moduleID", "p_inv_beta_vs_moduleID"};
+  "p_dt_forwarding_vs_moduleID", "p_inv_beta_vs_moduleID", "h_inv_beta_vs_moduleID"};
 
 /*
  * Draw the canvas that check_outlier_times.C used to draw directly, from the histograms
@@ -79,6 +79,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   TH2D* h_dt_forwarding_vs_nthHit = (TH2D*) file->Get("h_dt_forwarding_vs_nthHit");
   TProfile* p_dt_forwarding_vs_moduleID = (TProfile*) file->Get("p_dt_forwarding_vs_moduleID");
   TProfile* p_inv_beta_vs_moduleID = (TProfile*) file->Get("p_inv_beta_vs_moduleID");
+  TH2D* h_inv_beta_vs_moduleID = (TH2D*) file->Get("h_inv_beta_vs_moduleID");
   std::vector<TH1*> allHists = {
     h_dt0_forward, h_dt2_forward, h_dt0_backward, h_dt2_backward,
     h_dt_forwarding_forward, h_dt_forwarding_forward_h5,
@@ -86,7 +87,7 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
     h_dt_forwarding_backward, h_dt_forwarding_backward_h5,
     h_dt_forwarding_backward_h10, h_dt_forwarding_backward_h15,
     h_dt_forwarding_vs_moduleID, h_nthHits_vs_moduleID, h_dt_forwarding_vs_nthHit,
-    p_dt_forwarding_vs_moduleID, p_inv_beta_vs_moduleID};
+    p_dt_forwarding_vs_moduleID, p_inv_beta_vs_moduleID, h_inv_beta_vs_moduleID};
   for (unsigned i = 0; i < allHists.size(); i++) {
     if (!allHists[i]) {
       std::cerr << "Error: " << kOutlierTimeHists[i] << " not found in " << histPath << std::endl;
@@ -234,26 +235,35 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   p_dt_forwarding_vs_moduleID->Draw("E1");
 
   canvas->cd(8);
-  // The profile holds c/v, because that is the ratio whose mean is not biased by a noisy
-  // denominator. Invert each module bin to get the path weighted speed back, with the error
-  // propagating as sigma_beta = sigma / mean^2.
+  // The 2D holds the full c/v distribution per module. Its median is taken rather than its
+  // mean: the distribution is a sharp peak near 1 with a tail of genuinely slow particles, and
+  // a mean over that tail describes no track in particular. Inverting a median is exact,
+  // median(v/c) = 1 / median(c/v), so the inversion introduces no bias of its own.
   TH1D* h_beta_vs_moduleID = new TH1D("h_beta_vs_moduleID",
-    "Mean speed of forwarded hits vs module ID;Module ID;#beta",
-    p_inv_beta_vs_moduleID->GetNbinsX(),
-    p_inv_beta_vs_moduleID->GetXaxis()->GetXmin(),
-    p_inv_beta_vs_moduleID->GetXaxis()->GetXmax());
+    "Median speed of forwarded hits vs module ID;Module ID;#beta",
+    h_inv_beta_vs_moduleID->GetNbinsX(),
+    h_inv_beta_vs_moduleID->GetXaxis()->GetXmin(),
+    h_inv_beta_vs_moduleID->GetXaxis()->GetXmax());
   h_beta_vs_moduleID->SetDirectory(nullptr);
   double lowestBeta = 1., highestBeta = 1.;  // start at 1 so the reference line stays in range
-  for (int bin = 1; bin <= p_inv_beta_vs_moduleID->GetNbinsX(); bin++) {
-    if (p_inv_beta_vs_moduleID->GetBinEntries(bin) == 0) continue;
-    double invBeta = p_inv_beta_vs_moduleID->GetBinContent(bin);
-    if (invBeta == 0.) continue;
-    double beta = 1. / invBeta;
-    double error = p_inv_beta_vs_moduleID->GetBinError(bin) / (invBeta * invBeta);
+  for (int bin = 1; bin <= h_inv_beta_vs_moduleID->GetNbinsX(); bin++) {
+    TH1D* invBetaInModule =
+      h_inv_beta_vs_moduleID->ProjectionY(Form("inv_beta_module_%d", bin), bin, bin);
+    invBetaInModule->SetDirectory(nullptr);
+    double nEntries = invBetaInModule->Integral();
+    if (nEntries < 2.) { delete invBetaInModule; continue; }
+    double quantile = 0.5, median = 0.;
+    invBetaInModule->GetQuantiles(1, &median, &quantile);
+    if (median <= 0.) { delete invBetaInModule; continue; }
+    // the error on a median is about 1.25 times the one on a mean for a gaussian core
+    double medianError = 1.2533 * invBetaInModule->GetStdDev() / std::sqrt(nEntries);
+    double beta = 1. / median;
+    double error = medianError / (median * median);
     h_beta_vs_moduleID->SetBinContent(bin, beta);
     h_beta_vs_moduleID->SetBinError(bin, error);
     lowestBeta = std::min(lowestBeta, beta - error);
     highestBeta = std::max(highestBeta, beta + error);
+    delete invBetaInModule;
   }
   h_beta_vs_moduleID->SetLineColor(kBlue);
   h_beta_vs_moduleID->SetMarkerColor(kBlue);
