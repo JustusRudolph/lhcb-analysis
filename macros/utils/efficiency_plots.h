@@ -130,7 +130,7 @@ namespace Utils::EfficiencyPlots {
                              const std::string& type, bool isForward) {
     std::string region = (isForward ? "forward" : "backward");
     std::string histName = "efficiency_" + region + "_" + type;
-    TLegend* legend = new TLegend(0.6, 0.15, 0.88, 0.35);
+    TLegend* legend = new TLegend(0.55, 0.20, 0.83, 0.40);
     legend->SetBorderSize(0);
     TEfficiency* firstDrawn = nullptr;
     std::vector<TEfficiency*> drawn{};  // all of them decide the y range
@@ -169,9 +169,10 @@ namespace Utils::EfficiencyPlots {
   inline void drawRate(const std::vector<TFile*>& files, const std::vector<TString>& labels,
                        const std::string& histName, const std::string& title,
                        bool isVsEta, bool isForward, bool legendOnLeft = false) {
-    // the eta clone rate rises towards high eta, so its legend goes on the other side
-    TLegend* legend = legendOnLeft ? new TLegend(0.12, 0.65, 0.40, 0.85)
-                                   : new TLegend(0.6, 0.65, 0.88, 0.85);
+    // the eta clone rate rises towards high eta, so in the forward region its legend goes on
+    // the other side. Backward eta runs the other way, so there it stays on the right.
+    TLegend* legend = (legendOnLeft && isForward) ? new TLegend(0.17, 0.60, 0.45, 0.80)
+                                                  : new TLegend(0.55, 0.60, 0.83, 0.80);
     legend->SetBorderSize(0);
     // fetch and style first, the y range needs all of them before anything is drawn
     std::vector<TProfile*> rates{};
