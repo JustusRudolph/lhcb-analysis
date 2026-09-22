@@ -69,6 +69,10 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   TH2D* h_inv_beta_vs_moduleID = new TH2D("h_inv_beta_vs_moduleID", "c/v vs module ID for forwarded hits;Module ID;c / v", 64, -0.5, 63.5, 2500, 0., 5.);
   TProfile* p_dt_forwarding_vs_moduleID = new TProfile("p_dt_forwarding_vs_moduleID", "#Deltat mean and spread vs module ID of the extrapolated hit;Module ID;dt_{forward} (ns)", 64, -0.5, 63.5, "s");
   TH2D* h_nthHits_vs_moduleID = new TH2D("h_nthHits_vs_moduleID", "Number of hit at module ID for forwarded hits;Module ID;n_{hits}", 64, -0.5, 63.5, 40, -0.5, 39.5);
+  // mean dt against position in the track, split by direction: this is where the filter
+  // converging on the drift shows up
+  TProfile* p_dt_vs_nth_hit_forward = new TProfile("p_dt_vs_nth_hit_forward", "Mean #Deltat by hit number (forward);Nth hit;dt_{forward} (ns)", 40, -0.5, 39.5);
+  TProfile* p_dt_vs_nth_hit_backward = new TProfile("p_dt_vs_nth_hit_backward", "Mean #Deltat by hit number (backward);Nth hit;dt_{forward} (ns)", 40, -0.5, 39.5);
   TH2D* h_dt_forwarding_vs_nthHit = new TH2D("h_dt_forwarding_vs_nthHit", "#Deltat scatter vs hit number for forwarded hits;Nth hit;dt_{forward} (ns)", 40, -0.5, 39.5, 100, -1, 1);
 
   TH1D* h_n_outliers = new TH1D("h_n_outliers", "Number of outliers per track;n_{outliers}", 10, 0, 10);
@@ -196,11 +200,13 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
         if (i_hit == 5) h_dt_forwarding_forward_h5->Fill(dt_next_hit);
         if (i_hit == 10) h_dt_forwarding_forward_h10->Fill(dt_next_hit);
         if (i_hit == 15) h_dt_forwarding_forward_h15->Fill(dt_next_hit);
+        p_dt_vs_nth_hit_forward->Fill(i_hit + 1, dt_next_hit);
       } else {
         h_dt_forwarding_backward->Fill(dt_next_hit);
         if (i_hit == 5) h_dt_forwarding_backward_h5->Fill(dt_next_hit);
         if (i_hit == 10) h_dt_forwarding_backward_h10->Fill(dt_next_hit);
         if (i_hit == 15) h_dt_forwarding_backward_h15->Fill(dt_next_hit);
+        p_dt_vs_nth_hit_backward->Fill(i_hit + 1, dt_next_hit);
       }
       h_dt_forwarding_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, dt_next_hit );
       p_dt_forwarding_vs_moduleID->Fill( (h2.id >> 12) & 0x3F, dt_next_hit );
@@ -288,6 +294,8 @@ void get_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsign
   h_inv_beta_vs_moduleID->Write();
   h_nthHits_vs_moduleID->Write();
   h_dt_forwarding_vs_nthHit->Write();
+  p_dt_vs_nth_hit_forward->Write();
+  p_dt_vs_nth_hit_backward->Write();
   h_n_outliers->Write();
   h_outlier_position->Write();
   std::cout << "Histograms saved to: " << histOutputPath << std::endl;

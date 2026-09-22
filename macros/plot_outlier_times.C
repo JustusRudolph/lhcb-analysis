@@ -35,7 +35,8 @@ const std::vector<std::string> kOutlierTimeHists = {
   "h_dt_forwarding_backward", "h_dt_forwarding_backward_h5",
   "h_dt_forwarding_backward_h10", "h_dt_forwarding_backward_h15",
   "h_dt_forwarding_vs_moduleID", "h_nthHits_vs_moduleID", "h_dt_forwarding_vs_nthHit",
-  "p_dt_forwarding_vs_moduleID", "p_inv_beta_vs_moduleID", "h_inv_beta_vs_moduleID"};
+  "p_dt_forwarding_vs_moduleID", "p_inv_beta_vs_moduleID", "h_inv_beta_vs_moduleID",
+  "p_dt_vs_nth_hit_forward", "p_dt_vs_nth_hit_backward"};
 
 /*
  * Draw the canvas that check_outlier_times.C used to draw directly, from the histograms
@@ -80,6 +81,8 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   TProfile* p_dt_forwarding_vs_moduleID = (TProfile*) file->Get("p_dt_forwarding_vs_moduleID");
   TProfile* p_inv_beta_vs_moduleID = (TProfile*) file->Get("p_inv_beta_vs_moduleID");
   TH2D* h_inv_beta_vs_moduleID = (TH2D*) file->Get("h_inv_beta_vs_moduleID");
+  TProfile* p_dt_vs_nth_hit_forward = (TProfile*) file->Get("p_dt_vs_nth_hit_forward");
+  TProfile* p_dt_vs_nth_hit_backward = (TProfile*) file->Get("p_dt_vs_nth_hit_backward");
   std::vector<TH1*> allHists = {
     h_dt0_forward, h_dt2_forward, h_dt0_backward, h_dt2_backward,
     h_dt_forwarding_forward, h_dt_forwarding_forward_h5,
@@ -87,7 +90,8 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
     h_dt_forwarding_backward, h_dt_forwarding_backward_h5,
     h_dt_forwarding_backward_h10, h_dt_forwarding_backward_h15,
     h_dt_forwarding_vs_moduleID, h_nthHits_vs_moduleID, h_dt_forwarding_vs_nthHit,
-    p_dt_forwarding_vs_moduleID, p_inv_beta_vs_moduleID, h_inv_beta_vs_moduleID};
+    p_dt_forwarding_vs_moduleID, p_inv_beta_vs_moduleID, h_inv_beta_vs_moduleID,
+    p_dt_vs_nth_hit_forward, p_dt_vs_nth_hit_backward};
   for (unsigned i = 0; i < allHists.size(); i++) {
     if (!allHists[i]) {
       std::cerr << "Error: " << kOutlierTimeHists[i] << " not found in " << histPath << std::endl;
@@ -95,8 +99,8 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
     }
   }
 
-  TCanvas* canvas = new TCanvas("canvas", "Outlier Times", 2000, 800);
-  canvas->Divide(4, 2);
+  TCanvas* canvas = new TCanvas("canvas", "Outlier Times", 2500, 800);
+  canvas->Divide(5, 2);
   canvas->cd(1);
   // draw h0 and h2
   h_dt0_forward->SetTitle("Seeding time scatter from t_{0}^{est} and t_{2}^{est} (normalised)");
@@ -279,6 +283,21 @@ void plot_outlier_times(unsigned nEvents=5000, unsigned max_scatter=80000, unsig
   speedOfLight->SetLineStyle(2);
   speedOfLight->SetLineColor(kGray + 2);
   speedOfLight->Draw();
+
+  canvas->cd(9);
+  // mean dt against position in the track, the filter's convergence seen directly
+  p_dt_vs_nth_hit_forward->SetLineColor(kBlue);
+  p_dt_vs_nth_hit_forward->SetMarkerColor(kBlue);
+  p_dt_vs_nth_hit_forward->SetMarkerStyle(20);
+  p_dt_vs_nth_hit_forward->SetMarkerSize(0.7);
+  p_dt_vs_nth_hit_forward->Draw("E1");
+
+  canvas->cd(10);
+  p_dt_vs_nth_hit_backward->SetLineColor(kRed);
+  p_dt_vs_nth_hit_backward->SetMarkerColor(kRed);
+  p_dt_vs_nth_hit_backward->SetMarkerStyle(21);
+  p_dt_vs_nth_hit_backward->SetMarkerSize(0.7);
+  p_dt_vs_nth_hit_backward->Draw("E1");
 
   // save canvas
   TString outputDir = (Utils::Definitions::analysisRoot + "output/4d_tracking").c_str();
