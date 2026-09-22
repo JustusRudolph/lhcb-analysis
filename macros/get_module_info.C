@@ -8,10 +8,7 @@
 #include <iostream>
 #include <string>
 
-// tMin and tMax bound the timestamp histogram, the out of range counts are printed so that
-// it is clear how much of the sample falls outside them
-void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1,
-                     float tMin=-5., float tMax=15., int nTimeBins=1000) {
+void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1) {
   gROOT->SetBatch();  // don't show hists while running
   std::string stackRoot = std::getenv("STACK_ROOT");
   std::string analysisRoot = std::getenv("ANALYSIS_ROOT");
@@ -35,11 +32,8 @@ void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1,
                                      nBins, moduleBinEdges.data());
   TH1D* phiDensity = new TH1D("phiDensity", "Occupancy by #phi;#phi;Counts", 100, -3.15, 3.15);
   TH2D* xyDensity = new TH2D("xyDensity", "Occupancy by x-y;x;y", 20, -50, 50, 20, -50, 50);
-  TProfile* moduleTimes = new TProfile("module_times",
-                                       "Mean hit timestamp by module;module ID;t (ns)",
+  TProfile* moduleTimes = new TProfile("module_times", "Timestamps of hits in modules",
                                        nBins, moduleBinEdges.data());
-  TH1D* hitTimes = new TH1D("hit_times", "Hit timestamps;t (ns);Hits",
-                            nTimeBins, tMin, tMax);
   
   // now get the data from tree
   unsigned lhcbid, evNo, runNo;
@@ -57,7 +51,6 @@ void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1,
   fakeClusTree->SetBranchAddress("z", &z);
   fakeClusTree->SetBranchAddress("t", &t);
 
-  float tMinSeen = 1e9f, tMaxSeen = -1e9f;
   unsigned nEntries = fakeClusTree->GetEntries();
   for (unsigned i = 0; i < nEntries; i++) {
     fakeClusTree->GetEntry(i);
@@ -67,28 +60,18 @@ void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1,
     unsigned tvMod = (lhcbid >> 12) & 0x3F;
     moduleToZ->Fill(tvMod, z);
     moduleDensity->Fill(tvMod);
-    // times are not restricted to the requested module, they describe the whole detector
-    moduleTimes->Fill(tvMod, t);
-    hitTimes->Fill(t);
-    if (t < tMinSeen) tMinSeen = t;
-    if (t > tMaxSeen) tMaxSeen = t;
 
     // phi only filled for specific module that's requested
     if (moduleNoCheck >= 0 && tvMod != moduleNoCheck) continue;
     float phi = TMath::ATan2(y, x);
     phiDensity->Fill(phi);
     xyDensity->Fill(x, y);
+    moduleTimes->Fill(tvMod, t);
 
     // print status
     if (i && (i % 1000000 == 0))
       printf("Finished with %d %% of fake clusters.\n", (int) (100. * (float) i / nEntries));
   }
-
-  printf("Hit timestamps: seen %.3f .. %.3f ns, histogram covers %.3f .. %.3f ns\n",
-         tMinSeen, tMaxSeen, tMin, tMax);
-  printf("  %.0f below range, %.0f above range, out of %.0f hits\n",
-         hitTimes->GetBinContent(0), hitTimes->GetBinContent(nTimeBins + 1),
-         hitTimes->GetEntries());
 
   // Finally write the profile to a file
   TFile* outFile = new TFile((analysisRoot + "/hists/module_mc_info.root").c_str(), "RECREATE");
@@ -97,7 +80,6 @@ void get_module_info(int runNoCheck=-1, int evNoCheck=-1, int moduleNoCheck=-1,
   phiDensity->Write();
   xyDensity->Write();
   moduleTimes->Write();
-  hitTimes->Write();
 
   // clean up
   outFile->Close();

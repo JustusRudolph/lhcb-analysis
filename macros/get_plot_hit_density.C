@@ -2,6 +2,7 @@
 #include <TH1F.h>
 #include <TCanvas.h>
 #include <TGaxis.h>
+#include <TProfile.h>
 #include <TLegend.h>
 #include <TString.h>
 #include <TTree.h>
@@ -14,7 +15,10 @@
 #include "utils/definitions.h"
 #include "utils/basic_functions.h"
 
-void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot_only=false) {
+// tMin and tMax bound the timestamp histogram, the out of range counts are printed so it is
+// clear how much of the sample falls outside them
+void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot_only=false,
+                          float tMin=-5., float tMax=15., int nTimeBins=1000) {
   gStyle->SetOptStat(0);  // remove the info box
   TString output_suffix = Form("_%uev_%ups", nEvents, t_res_ps);
   TString root_output_path = Form((Utils::Definitions::analysisRoot + "hists/hits/hit_density%s.root").c_str(), output_suffix.Data());
@@ -24,6 +28,9 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
   TH1D *h_hits_forward_no_electrons = nullptr;
   TH1D *h_hits_backward_all = nullptr;
   TH1D *h_hits_backward_no_electrons = nullptr;
+  // every hit timestamp, and the mean timestamp per module
+  TH1D *h_hit_times = nullptr;
+  TProfile *p_module_times = nullptr;
 
   if (plot_only) {
     printf("Plotting from file %s...\n", root_output_path.Data());
@@ -43,6 +50,10 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     if (h_hits_forward_no_electrons) h_hits_forward_no_electrons->SetDirectory(0);
     if (h_hits_backward_all) h_hits_backward_all->SetDirectory(0);
     if (h_hits_backward_no_electrons) h_hits_backward_no_electrons->SetDirectory(0);
+    h_hit_times = (TH1D*) root_file->Get("hit_times");
+    p_module_times = (TProfile*) root_file->Get("module_times");
+    if (h_hit_times) h_hit_times->SetDirectory(0);
+    if (p_module_times) p_module_times->SetDirectory(0);
     root_file->Close();
   } else {
     TString input_filepath = Form((Utils::Definitions::stackRoot + "monitoring/monitoring%ups.root").c_str(), t_res_ps);
@@ -91,9 +102,20 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     unsigned n_velo_hits;
     int mc_pid;
     float mc_eta;
+    std::vector<unsigned> *mc_lhcbid = nullptr;
+    std::vector<float> *mc_t = nullptr;
     mc_track_tree->SetBranchAddress("nHitsVelo", &n_velo_hits);
     mc_track_tree->SetBranchAddress("pid", &mc_pid);
     mc_track_tree->SetBranchAddress("eta", &mc_eta);
+    mc_track_tree->SetBranchAddress("lhcbid", &mc_lhcbid);
+    mc_track_tree->SetBranchAddress("t", &mc_t);
+    h_hit_times = new TH1D("hit_times", "Hit timestamps;t (ns);Hits", nTimeBins, tMin, tMax);
+    p_module_times = new TProfile("module_times",
+      "Mean hit timestamp by module;module ID;t (ns)",
+      Utils::Definitions::kModules, -0.5, Utils::Definitions::kModules - 0.5);
+    h_hit_times->SetDirectory(0);
+    p_module_times->SetDirectory(0);
+    float tMinSeen = 1e9f, tMaxSeen = -1e9f;
     // one bin per hit count, so the bins sit on the integers
     h_hits_forward_all = new TH1D("hits_per_track_forward_all",
       "Hits per track;N_{hits}^{velo};MC particles", 41, -0.5, 40.5);
@@ -110,6 +132,14 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     }
     for (unsigned i_track = 0; i_track < mc_track_tree->GetEntries(); i_track++) {
       mc_track_tree->GetEntry(i_track);
+      // every hit of the track, regardless of direction or particle type
+      for (unsigned i_hit = 0; i_hit < mc_lhcbid->size(); i_hit++) {
+        float hit_t = mc_t->at(i_hit);
+        h_hit_times->Fill(hit_t);
+        p_module_times->Fill((mc_lhcbid->at(i_hit) >> 12) & 0x3F, hit_t);
+        if (hit_t < tMinSeen) tMinSeen = hit_t;
+        if (hit_t > tMaxSeen) tMaxSeen = hit_t;
+      }
       int mc_pid_abs = mc_pid < 0 ? -mc_pid : mc_pid;
       bool isForward = mc_eta > 0;
       if (isForward) {
@@ -122,6 +152,11 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     }
     printf("MC particles: %.0f forward, %.0f backward\n",
            h_hits_forward_all->GetEntries(), h_hits_backward_all->GetEntries());
+    printf("Hit timestamps: seen %.3f .. %.3f ns, histogram covers %.3f .. %.3f ns\n",
+           tMinSeen, tMaxSeen, tMin, tMax);
+    printf("  %.0f below range, %.0f above range, out of %.0f hits\n",
+           h_hit_times->GetBinContent(0), h_hit_times->GetBinContent(nTimeBins + 1),
+           h_hit_times->GetEntries());
     mc_file->Close();
 
     printf("Saving to file %s...\n", root_output_path.Data());
@@ -131,6 +166,8 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     h_hits_forward_no_electrons->Write();
     h_hits_backward_all->Write();
     h_hits_backward_no_electrons->Write();
+    h_hit_times->Write();
+    p_module_times->Write();
     printf("h_hit_density->GetEntries() = %f\n", h_hit_density->GetEntries());
     root_file->Close();
     printf("h_hit_density->GetEntries() = %f\n", h_hit_density->GetEntries());
@@ -233,4 +270,33 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
   c_hits->SaveAs(hits_output_path);
   printf("Hits per track plot saved to %s\n", hits_output_path.Data());
   delete c_hits;
+
+  // hit timestamps, and their mean per module
+  if (h_hit_times == nullptr || p_module_times == nullptr) {
+    printf("Error: Timestamp histograms not found!\n");
+    return;
+  }
+  TCanvas *c_times = new TCanvas("c_times", "Hit Timestamps", 800, 600);
+  h_hit_times->SetLineColor(kBlue);
+  h_hit_times->Draw("HIST");
+  gPad->SetLogy();  // the distribution has a long tail
+  TString times_output_path = Form((Utils::Definitions::analysisRoot +
+                                    "output/hits/hit_times%s.pdf").c_str(),
+                                   output_suffix.Data());
+  c_times->SaveAs(times_output_path);
+  delete c_times;
+
+  TCanvas *c_module_times = new TCanvas("c_module_times", "Mean Time per Module", 800, 600);
+  p_module_times->SetLineColor(kBlue);
+  p_module_times->SetMarkerColor(kBlue);
+  p_module_times->SetMarkerStyle(20);
+  p_module_times->SetMarkerSize(0.7);
+  p_module_times->Draw("E1");
+  TString module_times_output_path = Form((Utils::Definitions::analysisRoot +
+                                           "output/hits/module_times%s.pdf").c_str(),
+                                          output_suffix.Data());
+  c_module_times->SaveAs(module_times_output_path);
+  printf("Timestamp plots saved to %s and %s\n",
+         times_output_path.Data(), module_times_output_path.Data());
+  delete c_module_times;
 }
