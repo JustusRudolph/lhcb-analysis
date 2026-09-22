@@ -168,8 +168,10 @@ namespace Utils::EfficiencyPlots {
    */
   inline void drawRate(const std::vector<TFile*>& files, const std::vector<TString>& labels,
                        const std::string& histName, const std::string& title,
-                       bool isVsEta, bool isForward) {
-    TLegend* legend = new TLegend(0.6, 0.65, 0.88, 0.85);
+                       bool isVsEta, bool isForward, bool legendOnLeft = false) {
+    // the eta clone rate rises towards high eta, so its legend goes on the other side
+    TLegend* legend = legendOnLeft ? new TLegend(0.12, 0.65, 0.40, 0.85)
+                                   : new TLegend(0.6, 0.65, 0.88, 0.85);
     legend->SetBorderSize(0);
     // fetch and style first, the y range needs all of them before anything is drawn
     std::vector<TProfile*> rates{};
@@ -218,7 +220,7 @@ namespace Utils::EfficiencyPlots {
     canvas->cd(4);
     drawRate(files, labels, "ghost_rates", "Ghost Rates;#eta;Ghost Rate", true, isForward);
     canvas->cd(5);
-    drawRate(files, labels, "clone_rate", "Clone Rates;#eta;Clone Rate", true, isForward);
+    drawRate(files, labels, "clone_rate", "Clone Rates;#eta;Clone Rate", true, isForward, true);
     canvas->cd(6);
     drawRate(files, labels, "clone_rate_pt", "Clone Rates;p_{T} (MeV);Clone Rate",
              false, isForward);
