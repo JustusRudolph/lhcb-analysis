@@ -35,6 +35,8 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
   // every hit timestamp, and the mean timestamp per module
   TH1D *h_hit_times = nullptr;
   TProfile *p_module_times = nullptr;
+  // the full time distribution per module, i.e. what a within module time sort would act on
+  TH2D *h_times_vs_module = nullptr;
 
   if (plot_only) {
     printf("Plotting from file %s...\n", root_output_path.Data());
@@ -58,6 +60,8 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     p_module_times = (TProfile*) root_file->Get("module_times");
     if (h_hit_times) h_hit_times->SetDirectory(0);
     if (p_module_times) p_module_times->SetDirectory(0);
+    h_times_vs_module = (TH2D*) root_file->Get("hit_times_vs_module");
+    if (h_times_vs_module) h_times_vs_module->SetDirectory(0);
     root_file->Close();
   } else {
     TString input_filepath = Form((Utils::Definitions::stackRoot + "monitoring/monitoring%ups.root").c_str(), t_res_ps);
@@ -117,8 +121,13 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     p_module_times = new TProfile("module_times",
       "Mean hit timestamp by module;module ID;t (ns)",
       Utils::Definitions::kModules, -0.5, Utils::Definitions::kModules - 0.5);
+    h_times_vs_module = new TH2D("hit_times_vs_module",
+      "Hit timestamps by module;module ID;t (ns)",
+      Utils::Definitions::kModules, -0.5, Utils::Definitions::kModules - 0.5,
+      nTimeBins, tMin, tMax);
     h_hit_times->SetDirectory(0);
     p_module_times->SetDirectory(0);
+    h_times_vs_module->SetDirectory(0);
     float tMinSeen = 1e9f, tMaxSeen = -1e9f;
     // one bin per hit count, so the bins sit on the integers
     h_hits_forward_all = new TH1D("hits_per_track_forward_all",
@@ -141,6 +150,7 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
         float hit_t = mc_t->at(i_hit);
         h_hit_times->Fill(hit_t);
         p_module_times->Fill((mc_lhcbid->at(i_hit) >> 12) & 0x3F, hit_t);
+        h_times_vs_module->Fill((mc_lhcbid->at(i_hit) >> 12) & 0x3F, hit_t);
         if (hit_t < tMinSeen) tMinSeen = hit_t;
         if (hit_t > tMaxSeen) tMaxSeen = hit_t;
       }
@@ -172,6 +182,7 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
     h_hits_backward_no_electrons->Write();
     h_hit_times->Write();
     p_module_times->Write();
+    h_times_vs_module->Write();
     printf("h_hit_density->GetEntries() = %f\n", h_hit_density->GetEntries());
     root_file->Close();
     printf("h_hit_density->GetEntries() = %f\n", h_hit_density->GetEntries());
@@ -330,4 +341,29 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
   printf("Timestamp plots saved to %s and %s\n",
          times_output_path.Data(), module_times_output_path.Data());
   delete c_module_times;
+
+  // the timestamps of every hit against its module, which is what tells whether sorting by
+  // time within a module would separate anything
+  if (h_times_vs_module == nullptr) {
+    printf("Error: hit_times_vs_module histogram not found!\n");
+    return;
+  }
+  TCanvas *c_times_vs_module = new TCanvas("c_times_vs_module", "Timestamps by Module", 800, 600);
+  c_times_vs_module->SetRightMargin(0.14);  // room for the colour scale
+  h_times_vs_module->Draw("COLZ");
+  gPad->SetLogz();  // the spread per module is wide, a linear scale shows only the core
+  // same light reference as on the profile, cloned so each pad owns its own graph
+  TGraph *g_light_2d = (TGraph*) g_light->Clone("g_light_2d");
+  g_light_2d->Draw("L SAME");
+  TLegend *legend_times_2d = new TLegend(0.45, 0.78, 0.85, 0.88);
+  legend_times_2d->SetBorderSize(0);
+  legend_times_2d->AddEntry(g_light_2d,
+    Form("Light from (0,0,0) at r = %.0f mm", module_midpoint_r), "l");
+  legend_times_2d->Draw();
+  TString times_module_output_path = Form((Utils::Definitions::analysisRoot +
+                                           "output/hits/hit_times_vs_module%s.pdf").c_str(),
+                                          output_suffix.Data());
+  c_times_vs_module->SaveAs(times_module_output_path);
+  printf("Timestamps by module saved to %s\n", times_module_output_path.Data());
+  delete c_times_vs_module;
 }
