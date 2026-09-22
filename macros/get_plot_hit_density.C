@@ -2,6 +2,7 @@
 #include <TH1F.h>
 #include <TCanvas.h>
 #include <TGaxis.h>
+#include <TGraph.h>
 #include <TProfile.h>
 #include <TLegend.h>
 #include <TString.h>
@@ -17,8 +18,11 @@
 
 // tMin and tMax bound the timestamp histogram, the out of range counts are printed so it is
 // clear how much of the sample falls outside them
+// module_midpoint_r is the radius of the representative point on each module used for the light
+// reference line, i.e. how far off the beam axis a typical hit sits
 void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot_only=false,
-                          float tMin=-5., float tMax=15., int nTimeBins=1000) {
+                          float tMin=-5., float tMax=15., int nTimeBins=1000,
+                          float module_midpoint_r=25.) {
   gStyle->SetOptStat(0);  // remove the info box
   TString output_suffix = Form("_%uev_%ups", nEvents, t_res_ps);
   TString root_output_path = Form((Utils::Definitions::analysisRoot + "hists/hits/hit_density%s.root").c_str(), output_suffix.Data());
@@ -291,7 +295,34 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
   p_module_times->SetMarkerColor(kBlue);
   p_module_times->SetMarkerStyle(20);
   p_module_times->SetMarkerSize(0.7);
+  // where light originating at (0,0,0) at t=0 would reach a point at r=module_midpoint_r on the
+  // module, i.e. sqrt(z^2 + r^2) / c
+  std::vector<double> moduleToZ = Utils::Functions::get_module_to_z_vector();
+  TGraph *g_light = new TGraph();
+  double maxLight = 0., minLight = 1e9;
+  for (unsigned i_module = 0; i_module < moduleToZ.size(); i_module++) {
+    double z_module = moduleToZ[i_module];
+    double t_light = std::sqrt(z_module * z_module + module_midpoint_r * module_midpoint_r) *
+                     Utils::Definitions::inv_c_mmns;
+    g_light->SetPoint(i_module, i_module, t_light);
+    if (t_light > maxLight) maxLight = t_light;
+    if (t_light < minLight) minLight = t_light;
+  }
+  g_light->SetLineColor(kRed);
+  g_light->SetLineWidth(2);
+  // make sure both the points and the reference line fit in the frame
+  double yMax = std::max((double) p_module_times->GetMaximum(), maxLight);
+  double yMin = std::min((double) p_module_times->GetMinimum(), minLight);
+  double margin = 0.1 * (yMax - yMin);
+  p_module_times->SetMaximum(yMax + margin);
+  p_module_times->SetMinimum(yMin - margin);
   p_module_times->Draw("E1");
+  g_light->Draw("L SAME");
+  TLegend *legend_times = new TLegend(0.55, 0.75, 0.88, 0.87);
+  legend_times->SetBorderSize(0);
+  legend_times->AddEntry(p_module_times, "Mean hit timestamp", "lp");
+  legend_times->AddEntry(g_light, Form("Light from (0,0,0) at r = %.0f mm", module_midpoint_r), "l");
+  legend_times->Draw();
   TString module_times_output_path = Form((Utils::Definitions::analysisRoot +
                                            "output/hits/module_times%s.pdf").c_str(),
                                           output_suffix.Data());
