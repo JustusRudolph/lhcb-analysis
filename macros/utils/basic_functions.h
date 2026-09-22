@@ -53,7 +53,7 @@ namespace Utils::Functions {
       return Form("_%uev_%unm_%ups", nEvents, max_scatter, max_dt);
   }
 
-  std::vector<double> get_module_to_z_vector() {
+  std::vector<double> get_module_to_z_vector(bool print=false) {
   // Get module to z conversion histogram
   TFile *moduleFile = TFile::Open(
     (Utils::Definitions::analysisRoot + "hists/module_mc_info.root").c_str());
@@ -72,8 +72,10 @@ namespace Utils::Functions {
   }
   assert(moduleToZVec.size() == 64);
   // print for testing
-  for (unsigned i = 0; i < moduleToZVec.size(); i++) {
-    std::cout << "Module " << i << ": z=" << moduleToZVec[i] << "mm\n";
+  if (print) {
+    for (unsigned i = 0; i < moduleToZVec.size(); i++) {
+      std::cout << "Module " << i << ": z=" << moduleToZVec[i] << "mm\n";
+    }
   }
   // clean up
   moduleFile->Close();

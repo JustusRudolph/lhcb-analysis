@@ -21,7 +21,7 @@
 // module_midpoint_r is the radius of the representative point on each module used for the light
 // reference line, i.e. how far off the beam axis a typical hit sits
 void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot_only=false,
-                          float tMin=-5., float tMax=15., int nTimeBins=1000,
+                          float tMin=-2., float tMax=15., int nTimeBins=1000,
                           float module_midpoint_r=25.) {
   gStyle->SetOptStat(0);  // remove the info box
   TString output_suffix = Form("_%uev_%ups", nEvents, t_res_ps);
