@@ -318,7 +318,7 @@ void get_plot_hit_density(unsigned nEvents=2000, unsigned t_res_ps=50, bool plot
   p_module_times->SetMinimum(yMin - margin);
   p_module_times->Draw("E1");
   g_light->Draw("L SAME");
-  TLegend *legend_times = new TLegend(0.55, 0.75, 0.88, 0.87);
+  TLegend *legend_times = new TLegend(0.25, 0.75, 0.58, 0.87);
   legend_times->SetBorderSize(0);
   legend_times->AddEntry(p_module_times, "Mean hit timestamp", "lp");
   legend_times->AddEntry(g_light, Form("Light from (0,0,0) at r = %.0f mm", module_midpoint_r), "l");
